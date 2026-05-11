@@ -1,18 +1,56 @@
 'use client';
 
 import DashboardLayout from '@/components/layout/DashboardLayout';
-
-const liveRates = [
-  { property: 'Hotel Kodai International', roomType: 'Premium Suite', baseRate: 14250, compAvg: 13200, variance: '+6.0%', pulse: true },
-  { property: 'The Carlton', roomType: 'Executive Room', baseRate: 18500, compAvg: 16800, variance: '-5.82%', pulse: false },
-  { property: 'The Tamara Kodai', roomType: 'Standard King', baseRate: 16200, compAvg: 14500, variance: '+10.2%', pulse: false },
-  { property: 'Sterling Kodai Lake', roomType: 'Lake View', baseRate: 11500, compAvg: 12000, variance: '-4.1%', pulse: false },
-  { property: 'Le Poshe by Sparsa', roomType: 'Deluxe Suite', baseRate: 9800, compAvg: 11500, variance: '-14.7%', pulse: false },
-];
-
-const otaSources = ['Direct', 'Booking.com', 'Expedia', 'Agoda', 'MakeMyTrip'];
+import { useState, useEffect } from 'react';
+import type { LiveRateRow } from '@/types';
 
 export default function LiveRatesPage() {
+  const [liveRates, setLiveRates] = useState<LiveRateRow[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<string>('Never');
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/rates/live');
+      if (!res.ok) throw new Error('Failed to fetch live rates');
+      const data = await res.json();
+      if (data.success && data.data) {
+        setLiveRates(data.data.rates);
+        setLastUpdated(new Date(data.data.lastUpdated).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Compute stats
+  const hkiRate = liveRates.find(r => r.isTarget);
+  const carltonRate = liveRates.find(r => r.slug === 'the-carlton');
+  const tamaraRate = liveRates.find(r => r.slug === 'the-tamara-kodai');
+  const sterlingRate = liveRates.find(r => r.slug === 'sterling-kodai-lake');
+  const lePosheRate = liveRates.find(r => r.slug === 'le-poshe-by-sparsa');
+
+  // Compute average of competitors
+  const competitors = liveRates.filter(r => !r.isTarget && r.currentMapRate != null);
+  const compAvg = competitors.length > 0 
+    ? competitors.reduce((sum, r) => sum + (r.currentMapRate || 0), 0) / competitors.length 
+    : 0;
+
+  // Extract all OTAs used across all hotels to show disparity.
+  // In a real scenario, this would come from a dedicated /api/rates/ota endpoint.
+  // We'll aggregate them here for demonstration.
+  const allOTAs = Array.from(new Set(liveRates.map(r => r.cheapestOta).filter(Boolean))) as string[];
+
   return (
     <DashboardLayout>
       {/* Header Ticker Bar */}
@@ -21,18 +59,41 @@ export default function LiveRatesPage() {
         <div className="flex items-center gap-2 shrink-0">
           <span className="text-label-caps" style={{ color: 'var(--color-text-secondary)' }}>LIVE PULSE</span>
           <span className="text-data-mono" style={{ color: 'var(--color-gold)' }}>HKI-01</span>
-          <span className="text-data-mono" style={{ color: 'var(--color-text-primary)' }}>₹14,250</span>
-          <span className="text-data-mono" style={{ color: 'var(--color-positive)' }}>+1.2%</span>
+          <span className="text-data-mono" style={{ color: 'var(--color-text-primary)' }}>{hkiRate?.currentMapRate ? `₹${hkiRate.currentMapRate.toLocaleString()}` : '--'}</span>
+          <span className="text-data-mono" style={{ color: (hkiRate?.deltaPercent || 0) >= 0 ? 'var(--color-positive)' : 'var(--color-negative)' }}>
+            {hkiRate?.deltaPercent ? (hkiRate.deltaPercent > 0 ? `+${hkiRate.deltaPercent}%` : `${hkiRate.deltaPercent}%`) : '0.0%'}
+          </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <span className="text-data-mono" style={{ color: 'var(--color-text-secondary)' }}>CARL-01</span>
-          <span className="text-data-mono" style={{ color: 'var(--color-text-primary)' }}>₹18,500</span>
-          <span className="text-data-mono" style={{ color: 'var(--color-text-secondary)' }}>+0.0%</span>
+          <span className="text-data-mono" style={{ color: 'var(--color-text-primary)' }}>{carltonRate?.currentMapRate ? `₹${carltonRate.currentMapRate.toLocaleString()}` : '--'}</span>
+          <span className="text-data-mono" style={{ color: (carltonRate?.deltaPercent || 0) >= 0 ? 'var(--color-text-secondary)' : 'var(--color-negative)' }}>
+            {carltonRate?.deltaPercent ? (carltonRate.deltaPercent > 0 ? `+${carltonRate.deltaPercent}%` : `${carltonRate.deltaPercent}%`) : '0.0%'}
+          </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <span className="text-data-mono" style={{ color: 'var(--color-text-secondary)' }}>TAM-01</span>
-          <span className="text-data-mono" style={{ color: 'var(--color-text-primary)' }}>₹16,200</span>
-          <span className="text-data-mono" style={{ color: 'var(--color-positive)' }}>+2.4%</span>
+          <span className="text-data-mono" style={{ color: 'var(--color-text-primary)' }}>{tamaraRate?.currentMapRate ? `₹${tamaraRate.currentMapRate.toLocaleString()}` : '--'}</span>
+          <span className="text-data-mono" style={{ color: (tamaraRate?.deltaPercent || 0) >= 0 ? 'var(--color-positive)' : 'var(--color-negative)' }}>
+            {tamaraRate?.deltaPercent ? (tamaraRate.deltaPercent > 0 ? `+${tamaraRate.deltaPercent}%` : `${tamaraRate.deltaPercent}%`) : '0.0%'}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-data-mono" style={{ color: 'var(--color-text-secondary)' }}>STER-01</span>
+          <span className="text-data-mono" style={{ color: 'var(--color-text-primary)' }}>{sterlingRate?.currentMapRate ? `₹${sterlingRate.currentMapRate.toLocaleString()}` : '--'}</span>
+          <span className="text-data-mono" style={{ color: (sterlingRate?.deltaPercent || 0) >= 0 ? 'var(--color-positive)' : 'var(--color-negative)' }}>
+            {sterlingRate?.deltaPercent ? (sterlingRate.deltaPercent > 0 ? `+${sterlingRate.deltaPercent}%` : `${sterlingRate.deltaPercent}%`) : '0.0%'}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-data-mono" style={{ color: 'var(--color-text-secondary)' }}>POSH-01</span>
+          <span className="text-data-mono" style={{ color: 'var(--color-text-primary)' }}>{lePosheRate?.currentMapRate ? `₹${lePosheRate.currentMapRate.toLocaleString()}` : '--'}</span>
+          <span className="text-data-mono" style={{ color: (lePosheRate?.deltaPercent || 0) >= 0 ? 'var(--color-positive)' : 'var(--color-negative)' }}>
+            {lePosheRate?.deltaPercent ? (lePosheRate.deltaPercent > 0 ? `+${lePosheRate.deltaPercent}%` : `${lePosheRate.deltaPercent}%`) : '0.0%'}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 ml-auto">
+           <span className="text-data-mono" style={{ color: 'var(--color-text-secondary)' }}>Last updated: {lastUpdated}</span>
         </div>
       </div>
 
@@ -81,25 +142,32 @@ export default function LiveRatesPage() {
                   </tr>
                 </thead>
                 <tbody className="text-data-mono">
-                  {liveRates.map((rate, i) => (
-                    <tr key={i} className="transition-colors hover:bg-black/5"
-                      style={{ borderBottom: i < liveRates.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
-                      <td className="py-4 px-4">
-                        <div style={{ color: rate.property === 'Hotel Kodai International' ? 'var(--color-gold)' : 'var(--color-text-primary)', fontWeight: rate.property === 'Hotel Kodai International' ? 600 : 400 }}>{rate.property}</div>
-                        <div style={{ color: 'var(--color-text-secondary)', fontSize: '11px' }}>{rate.roomType}</div>
-                      </td>
-                      <td className="py-4 px-4 text-right" style={{ color: 'var(--color-text-primary)' }}>₹{rate.baseRate.toLocaleString()}</td>
-                      <td className="py-4 px-4 text-right" style={{ color: 'var(--color-text-secondary)' }}>₹{rate.compAvg.toLocaleString()}</td>
-                      <td className="py-4 px-4 text-right" style={{ color: rate.variance.startsWith('+') ? 'var(--color-positive)' : 'var(--color-negative)' }}>{rate.variance}</td>
-                      <td className="py-4 px-4 text-center">
-                        <div className="w-3 h-3 rounded-full mx-auto" style={{
-                          background: rate.pulse ? 'var(--color-positive)' : 'var(--color-text-secondary)',
-                          opacity: rate.pulse ? 1 : 0.3,
-                          boxShadow: rate.pulse ? '0 0 8px rgba(45, 106, 79, 0.5)' : 'none',
-                        }} />
-                      </td>
-                    </tr>
-                  ))}
+                  {loading && liveRates.length === 0 ? (
+                    <tr><td colSpan={5} className="py-8 text-center text-gray-500">Loading data...</td></tr>
+                  ) : liveRates.map((rate, i) => {
+                    const variance = rate.currentMapRate ? (((rate.currentMapRate - compAvg) / compAvg) * 100) : 0;
+                    return (
+                      <tr key={i} className="transition-colors hover:bg-black/5"
+                        style={{ borderBottom: i < liveRates.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+                        <td className="py-4 px-4">
+                          <div style={{ color: rate.isTarget ? 'var(--color-gold)' : 'var(--color-text-primary)', fontWeight: rate.isTarget ? 600 : 400 }}>{rate.hotelName}</div>
+                          <div style={{ color: 'var(--color-text-secondary)', fontSize: '11px', textTransform: 'capitalize' }}>{rate.category}</div>
+                        </td>
+                        <td className="py-4 px-4 text-right" style={{ color: 'var(--color-text-primary)' }}>{rate.currentMapRate ? `₹${rate.currentMapRate.toLocaleString()}` : '--'}</td>
+                        <td className="py-4 px-4 text-right" style={{ color: 'var(--color-text-secondary)' }}>₹{Math.round(compAvg).toLocaleString()}</td>
+                        <td className="py-4 px-4 text-right" style={{ color: variance > 0 ? 'var(--color-positive)' : variance < 0 ? 'var(--color-negative)' : 'var(--color-text-secondary)' }}>
+                          {variance > 0 ? `+${variance.toFixed(1)}%` : `${variance.toFixed(1)}%`}
+                        </td>
+                        <td className="py-4 px-4 text-center">
+                          <div className="w-3 h-3 rounded-full mx-auto" style={{
+                            background: rate.availability === 'sold-out' ? 'var(--color-negative)' : rate.availability === 'high' ? 'var(--color-positive)' : 'var(--color-warning)',
+                            opacity: rate.availability === 'sold-out' ? 0.3 : 1,
+                            boxShadow: rate.availability === 'high' ? '0 0 8px rgba(45, 106, 79, 0.5)' : 'none',
+                          }} />
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -124,23 +192,29 @@ export default function LiveRatesPage() {
             <h3 className="text-headline-mobile mb-phi-md" style={{ color: 'var(--color-text-primary)' }}>OTA Disparity</h3>
 
             {/* Alert */}
-            <div className="p-4 rounded-xl mb-phi-lg clay-inset" style={{ border: '1px solid rgba(168, 121, 69, 0.2)' }}>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="material-symbols-outlined text-[16px]" style={{ color: 'var(--color-warning)' }}>warning</span>
-                <span className="text-label-caps" style={{ color: 'var(--color-warning)' }}>Rate Leakage Detected</span>
+            {hkiRate && hkiRate.cheapestOta && hkiRate.cheapestOta !== 'official' && (
+              <div className="p-4 rounded-xl mb-phi-lg clay-inset" style={{ border: '1px solid rgba(168, 121, 69, 0.2)' }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="material-symbols-outlined text-[16px]" style={{ color: 'var(--color-warning)' }}>warning</span>
+                  <span className="text-label-caps" style={{ color: 'var(--color-warning)' }}>Rate Leakage Detected</span>
+                </div>
+                <p className="text-body-md" style={{ color: 'var(--color-text-secondary)' }}>
+                  <span className="capitalize">{hkiRate.cheapestOta}</span> is offering a lower rate than official channels.
+                </p>
               </div>
-              <p className="text-body-md" style={{ color: 'var(--color-text-secondary)' }}>Expedia is undercutting Direct by ₹450 on MAP rates.</p>
-            </div>
+            )}
 
             {/* OTA Source List */}
             <div className="flex flex-col gap-4">
-              {otaSources.map((source, i) => (
-                <div key={i} className="flex items-center justify-between" style={{ borderBottom: i < otaSources.length - 1 ? '1px solid var(--color-border)' : 'none', paddingBottom: i < otaSources.length - 1 ? '16px' : '0' }}>
-                  <span className="text-data-mono" style={{ color: 'var(--color-text-primary)' }}>{source}</span>
+              {allOTAs.length === 0 ? (
+                <p className="text-body-md text-gray-500">No OTA data available.</p>
+              ) : allOTAs.map((source, i) => (
+                <div key={i} className="flex items-center justify-between" style={{ borderBottom: i < allOTAs.length - 1 ? '1px solid var(--color-border)' : 'none', paddingBottom: i < allOTAs.length - 1 ? '16px' : '0' }}>
+                  <span className="text-data-mono capitalize" style={{ color: 'var(--color-text-primary)' }}>{source}</span>
                   <div className="h-2 flex-1 mx-4 rounded-full overflow-hidden clay-inset">
                     <div className="h-full rounded-full" style={{
                       width: `${95 - i * 12}%`,
-                      background: i === 0 ? 'var(--color-positive)' : i === 2 ? 'var(--color-negative)' : 'var(--color-analytics)',
+                      background: source === 'official' || source === 'direct' ? 'var(--color-positive)' : i % 2 === 0 ? 'var(--color-warning)' : 'var(--color-analytics)',
                     }} />
                   </div>
                 </div>

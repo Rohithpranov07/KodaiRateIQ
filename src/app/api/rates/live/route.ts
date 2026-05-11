@@ -68,6 +68,8 @@ export async function GET() {
         starRating: hotel.starRating,
         role: hotel.role,
         currentMapRate: currentRate,
+        currentCpRate: todaySnap?.bestCpRate ?? null,
+        currentEpRate: todaySnap?.bestEpRate ?? null,
         yesterdayMapRate: yesterdayRate,
         deltaPercent: deltaPercent ? Math.round(deltaPercent * 10) / 10 : null,
         trend: getTrend(deltaPercent),

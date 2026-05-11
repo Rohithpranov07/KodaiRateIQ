@@ -125,6 +125,8 @@ export interface LiveRateRow {
   starRating: number;
   role: string;
   currentMapRate: number | null;
+  currentCpRate: number | null;
+  currentEpRate: number | null;
   yesterdayMapRate: number | null;
   deltaPercent: number | null;
   trend: 'up' | 'down' | 'stable';

@@ -1,6 +1,3 @@
-// KodaiRateIQ — Prisma Schema
-// Hotel Rate Intelligence Platform for Kodaikanal
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,122 +7,89 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ============================================================
-// HOTELS
-// ============================================================
-
 model Hotel {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  slug        String   @unique
-  category    String   // "ultra-premium", "premium", "mid-premium", "standard"
-  starRating  Int      @default(3)
-  address     String?
-  city        String   @default("Kodaikanal")
-  latitude    Float?
-  longitude   Float?
-  website     String?
-  phone       String?
-  isTarget    Boolean  @default(false) // true for Hotel Kodai International
-  role        String   @default("competitor") // "target", "premium-anchor", "ultra-premium-anchor", "direct-competitor"
-  imageUrl    String?
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  rooms              Room[]
-  dailyRates         DailyRate[]
-  facilities         Facility[]
+  id                  String               @id @default(cuid())
+  name                String               @unique
+  slug                String               @unique
+  category            String
+  starRating          Int                  @default(3)
+  address             String?
+  city                String               @default("Kodaikanal")
+  latitude            Float?
+  longitude           Float?
+  website             String?
+  phone               String?
+  isTarget            Boolean              @default(false)
+  role                String               @default("competitor")
+  imageUrl            String?
+  description         String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
   competitorSnapshots CompetitorSnapshot[]
-  recommendations    Recommendation[]
-  rateHistory        RateHistory[]
+  dailyRates          DailyRate[]
+  facilities          Facility[]
+  rateHistory         RateHistory[]
+  recommendations     Recommendation[]
+  rooms               Room[]
 
   @@index([slug])
   @@index([isTarget])
 }
 
-// ============================================================
-// ROOMS
-// ============================================================
-
 model Room {
-  id          String   @id @default(cuid())
-  hotelId     String
-  name        String
-  type        String   // "standard", "deluxe", "suite", "premium", "cottage"
-  maxOccupancy Int     @default(2)
-  bedType     String?  // "king", "twin", "double"
-  hasLakeView Boolean  @default(false)
-  hasBalcony  Boolean  @default(false)
-  sqft        Int?
-  amenities   String[] // array of amenity strings
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  hotel       Hotel       @relation(fields: [hotelId], references: [id], onDelete: Cascade)
-  dailyRates  DailyRate[]
+  id           String      @id @default(cuid())
+  hotelId      String
+  name         String
+  type         String
+  maxOccupancy Int         @default(2)
+  bedType      String?
+  hasLakeView  Boolean     @default(false)
+  hasBalcony   Boolean     @default(false)
+  sqft         Int?
+  amenities    String[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  dailyRates   DailyRate[]
+  hotel        Hotel       @relation(fields: [hotelId], references: [id], onDelete: Cascade)
 
   @@unique([hotelId, name])
   @@index([hotelId])
 }
 
-// ============================================================
-// DAILY RATES — Core pricing data
-// ============================================================
-
 model DailyRate {
-  id              String   @id @default(cuid())
-  hotelId         String
-  roomId          String?
-  date            DateTime @db.Date // The date this rate is for
-  
-  // Pricing
-  mapRate         Float?   // Modified American Plan (room + breakfast + dinner)
-  cpRate          Float?   // Continental Plan (room + breakfast)
-  epRate          Float?   // European Plan (room only)
-  rackRate        Float?   // Published rack rate
-  
-  // Tax details
-  taxPercent      Float?   @default(18)
-  taxInclusive    Boolean  @default(false)
-  totalWithTax    Float?   // Final price including tax
-  
-  // Occupancy pricing
-  singleOccRate   Float?
-  doubleOccRate   Float?
-  extraAdultRate  Float?
-  extraChildRate  Float?
-  
-  // Source
-  source          String   // "official", "booking.com", "goibibo", "makemytrip", "agoda", "expedia"
-  sourceUrl       String?
-  
-  // Availability
-  isAvailable     Boolean  @default(true)
-  roomsLeft       Int?
-  
-  // Meal details
-  breakfastIncluded Boolean @default(false)
-  dinnerIncluded    Boolean @default(false)
-  lunchIncluded     Boolean @default(false)
-  mealDetails       String?
-  
-  // Cancellation
+  id                 String   @id @default(cuid())
+  hotelId            String
+  roomId             String?
+  date               DateTime @db.Date
+  mapRate            Float?
+  cpRate             Float?
+  epRate             Float?
+  rackRate           Float?
+  taxPercent         Float?   @default(18)
+  taxInclusive       Boolean  @default(false)
+  totalWithTax       Float?
+  singleOccRate      Float?
+  doubleOccRate      Float?
+  extraAdultRate     Float?
+  extraChildRate     Float?
+  source             String
+  sourceUrl          String?
+  isAvailable        Boolean  @default(true)
+  roomsLeft          Int?
+  breakfastIncluded  Boolean  @default(false)
+  dinnerIncluded     Boolean  @default(false)
+  lunchIncluded      Boolean  @default(false)
+  mealDetails        String?
   cancellationPolicy String?
-  freeCancellation   Boolean @default(false)
-  
-  // Offers
-  hasDiscount     Boolean  @default(false)
-  discountPercent Float?
-  offerDescription String?
-  
-  // Metadata
-  scrapedAt       DateTime @default(now())
-  isValid         Boolean  @default(true)
-  confidence      Float    @default(1.0) // 0-1 confidence in data accuracy
-  
-  hotel           Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
-  room            Room?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  freeCancellation   Boolean  @default(false)
+  hasDiscount        Boolean  @default(false)
+  discountPercent    Float?
+  offerDescription   String?
+  scrapedAt          DateTime @default(now())
+  isValid            Boolean  @default(true)
+  confidence         Float    @default(1.0)
+  hotel              Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  room               Room?    @relation(fields: [roomId], references: [id])
 
   @@index([hotelId, date])
   @@index([date])
@@ -133,163 +97,120 @@ model DailyRate {
   @@index([hotelId, date, source])
 }
 
-// ============================================================
-// FACILITIES
-// ============================================================
-
 model Facility {
   id          String   @id @default(cuid())
   hotelId     String
-  name        String   // "spa", "pool", "bar", "restaurant", "wifi", "parking", "gym", "lake-view"
-  category    String   // "dining", "recreation", "amenity", "view", "service"
+  name        String
+  category    String
   available   Boolean  @default(true)
-  quality     Int?     @default(3) // 1-5 rating
+  quality     Int?     @default(3)
   description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
   hotel       Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
 
   @@unique([hotelId, name])
   @@index([hotelId])
 }
 
-// ============================================================
-// RECOMMENDATIONS
-// ============================================================
-
 model Recommendation {
-  id                  String   @id @default(cuid())
-  hotelId             String
-  date                DateTime @db.Date
-  
-  // Recommended pricing
-  recommendedMapRate  Float
-  recommendedCpRate   Float?
-  recommendedEpRate   Float?
-  
-  // Range
-  minRate             Float
-  maxRate             Float
-  optimalRate         Float
-  
-  // Strategy
-  strategy            String   // "aggressive", "conservative", "balanced", "premium"
-  confidenceScore     Float    // 0-1
-  reasoning           String   @db.Text
-  
-  // Market context
-  avgCompetitorRate   Float?
-  marketPosition      String?  // "below-market", "at-market", "above-market"
-  
-  // AI metadata
-  aiModel             String   @default("gemini-2.0-flash")
-  aiPromptVersion     String?
-  rawAiResponse       String?  @db.Text
-  
-  // Seasonality
-  seasonType          String?  // "peak", "off-peak", "shoulder", "festival"
-  demandLevel         String?  // "high", "medium", "low"
-  weekendPremium      Float?   @default(0)
-  
-  createdAt           DateTime @default(now())
-
-  hotel               Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  id                 String    @id @default(cuid())
+  hotelId            String
+  date               DateTime  @db.Date
+  recommendedMapRate Float
+  recommendedCpRate  Float?
+  recommendedEpRate  Float?
+  minRate            Float
+  maxRate            Float
+  optimalRate        Float
+  strategy           String
+  confidenceScore    Float
+  reasoning          String
+  avgCompetitorRate  Float?
+  marketPosition     String?
+  aiModel            String    @default("gemini-2.0-flash")
+  aiPromptVersion    String?
+  rawAiResponse      String?
+  seasonType         String?
+  demandLevel        String?
+  weekendPremium     Float?    @default(0)
+  createdAt          DateTime  @default(now())
+  appliedAt          DateTime?
+  isApplied          Boolean   @default(false)
+  hotel              Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
 
   @@index([hotelId, date])
   @@index([date])
 }
 
-// ============================================================
-// RATE HISTORY — Time series for charts
-// ============================================================
-
 model RateHistory {
-  id          String   @id @default(cuid())
-  hotelId     String
-  date        DateTime @db.Date
-  mapRate     Float?
-  cpRate      Float?
-  epRate      Float?
-  source      String
-  deltaPercent Float?   // Day-over-day change percentage
-  movingAvg7  Float?   // 7-day moving average
-  movingAvg30 Float?   // 30-day moving average
-  volatility  Float?   // Price volatility metric
-  createdAt   DateTime @default(now())
-
-  hotel       Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  id           String   @id @default(cuid())
+  hotelId      String
+  date         DateTime @db.Date
+  mapRate      Float?
+  cpRate       Float?
+  epRate       Float?
+  source       String
+  deltaPercent Float?
+  movingAvg7   Float?
+  movingAvg30  Float?
+  volatility   Float?
+  createdAt    DateTime @default(now())
+  hotel        Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
 
   @@unique([hotelId, date, source])
   @@index([hotelId, date])
   @@index([date])
 }
 
-// ============================================================
-// COMPETITOR SNAPSHOTS — Daily competitor state
-// ============================================================
-
 model CompetitorSnapshot {
-  id              String   @id @default(cuid())
-  hotelId         String
-  date            DateTime @db.Date
-  
-  bestMapRate     Float?
-  bestCpRate      Float?
-  bestEpRate      Float?
-  bestSource      String?
-  
-  worstMapRate    Float?
-  avgMapRate      Float?
-  
-  availability    String?  // "high", "medium", "low", "sold-out"
-  activeOffers    String?  @db.Text
-  
-  createdAt       DateTime @default(now())
-
-  hotel           Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  id           String   @id @default(cuid())
+  hotelId      String
+  date         DateTime @db.Date
+  bestMapRate  Float?
+  bestCpRate   Float?
+  bestEpRate   Float?
+  bestSource   String?
+  worstMapRate Float?
+  avgMapRate   Float?
+  availability String?
+  activeOffers String?
+  createdAt    DateTime @default(now())
+  hotel        Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
 
   @@unique([hotelId, date])
   @@index([hotelId, date])
   @@index([date])
 }
 
-// ============================================================
-// SCRAPE LOGS — Audit trail
-// ============================================================
-
 model ScrapeLog {
-  id          String   @id @default(cuid())
-  source      String
-  hotelName   String?
-  status      String   // "success", "failed", "partial", "timeout"
-  duration    Int?     // milliseconds
-  ratesFound  Int      @default(0)
+  id           String   @id @default(cuid())
+  source       String
+  hotelName    String?
+  status       String
+  duration     Int?
+  ratesFound   Int      @default(0)
   errorMessage String?
-  errorStack  String?  @db.Text
-  retryCount  Int      @default(0)
-  userAgent   String?
-  createdAt   DateTime @default(now())
+  errorStack   String?
+  retryCount   Int      @default(0)
+  userAgent    String?
+  createdAt    DateTime @default(now())
 
   @@index([source, createdAt])
   @@index([status])
 }
 
-// ============================================================
-// AI INSIGHTS — Gemini-generated market intelligence
-// ============================================================
-
 model AiInsight {
-  id          String   @id @default(cuid())
-  date        DateTime @db.Date
-  type        String   // "pricing-pressure", "demand-surge", "premium-opportunity", "competitor-undercut", "weekend-uplift"
-  title       String
-  summary     String   @db.Text
-  details     String?  @db.Text
-  severity    String   @default("info") // "info", "warning", "critical", "opportunity"
-  actionable  Boolean  @default(true)
-  confidence  Float    @default(0.8)
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  date       DateTime @db.Date
+  type       String
+  title      String
+  summary    String
+  details    String?
+  severity   String   @default("info")
+  actionable Boolean  @default(true)
+  confidence Float    @default(0.8)
+  createdAt  DateTime @default(now())
 
   @@index([date])
   @@index([type])

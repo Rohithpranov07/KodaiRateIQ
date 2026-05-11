@@ -1,16 +1,45 @@
 'use client';
 
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { useState, useEffect } from 'react';
 
-const compSet = [
-  { name: 'The Carlton', tier: 'Ultra-Luxury', map: 18500, cp: 16000, ota: 16000, vol: 'High', facilities: ['Spa', 'Golf', 'Lake View'] },
-  { name: 'The Tamara Kodai', tier: 'Ultra-Luxury', map: 16200, cp: 14800, ota: 14800, vol: 'Med', facilities: ['Spa', 'Heritage', 'Valet'] },
-  { name: 'Hotel Kodai International', tier: 'Premium Luxury', map: 14250, cp: 12500, ota: 12500, vol: 'Low', facilities: ['Spa', 'Bar', 'MICE'] },
-  { name: 'Sterling Kodai Lake', tier: 'Premium', map: 11500, cp: 10200, ota: 10000, vol: 'High', facilities: ['Lake View', 'Family'] },
-  { name: 'Le Poshe by Sparsa', tier: 'Premium', map: 9800, cp: 8500, ota: 8500, vol: 'Low', facilities: ['Spa', 'Nature'] },
-];
+interface CompetitorRow {
+  id: string;
+  name: string;
+  slug: string;
+  category: string;
+  isTarget: boolean;
+  map: number | null;
+  cp: number | null;
+  ep: number | null;
+  ota: number | null;
+  vol: string;
+  facilities: string[];
+}
 
 export default function CompetitorsPage() {
+  const [compSet, setCompSet] = useState<CompetitorRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCompetitors = async () => {
+      try {
+        const res = await fetch('/api/competitors');
+        if (!res.ok) throw new Error('Failed to fetch');
+        const data = await res.json();
+        if (data.success && data.data) {
+          setCompSet(data.data);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchCompetitors();
+  }, []);
+
   return (
     <DashboardLayout>
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-phi-xl gap-4">
@@ -40,30 +69,34 @@ export default function CompetitorsPage() {
               </tr>
             </thead>
             <tbody className="text-data-mono">
-              {compSet.map((hotel, i) => (
+              {loading ? (
+                <tr><td colSpan={7} className="py-8 text-center text-gray-500">Loading competitor data...</td></tr>
+              ) : compSet.map((hotel, i) => (
                 <tr key={i} className="hover:bg-black/5 transition-colors" style={{ borderBottom: i < compSet.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
-                  <td className="py-4 px-4 font-medium" style={{ color: hotel.name === 'Hotel Kodai International' ? 'var(--color-gold)' : 'var(--color-text-primary)' }}>
+                  <td className="py-4 px-4 font-medium" style={{ color: hotel.isTarget ? 'var(--color-gold)' : 'var(--color-text-primary)' }}>
                     {hotel.name}
                   </td>
                   <td className="py-4 px-4">
                     <span className="px-2 py-1 rounded text-[10px] uppercase font-semibold clay-inset" style={{ color: 'var(--color-text-secondary)' }}>
-                      {hotel.tier}
+                      {hotel.category}
                     </span>
                   </td>
-                  <td className="py-4 px-4 text-right" style={{ color: 'var(--color-text-primary)' }}>₹{hotel.map.toLocaleString()}</td>
-                  <td className="py-4 px-4 text-right" style={{ color: 'var(--color-text-secondary)' }}>₹{hotel.cp.toLocaleString()}</td>
+                  <td className="py-4 px-4 text-right" style={{ color: 'var(--color-text-primary)' }}>{hotel.map ? `₹${hotel.map.toLocaleString()}` : '--'}</td>
+                  <td className="py-4 px-4 text-right" style={{ color: 'var(--color-text-secondary)' }}>{hotel.cp ? `₹${hotel.cp.toLocaleString()}` : '--'}</td>
                   <td className="py-4 px-4 text-right">
-                    <span style={{ color: hotel.ota < hotel.cp ? 'var(--color-negative)' : 'var(--color-text-secondary)' }}>
-                      ₹{hotel.ota.toLocaleString()}
-                    </span>
+                    {hotel.ota ? (
+                      <span style={{ color: hotel.cp && hotel.ota < hotel.cp ? 'var(--color-negative)' : 'var(--color-text-secondary)' }}>
+                        ₹{hotel.ota.toLocaleString()}
+                      </span>
+                    ) : '--'}
                   </td>
                   <td className="py-4 px-4 text-center">
                     <span className="material-symbols-outlined text-[18px]" style={{ color: hotel.vol === 'High' ? 'var(--color-negative)' : hotel.vol === 'Low' ? 'var(--color-positive)' : 'var(--color-warning)' }}>
                       {hotel.vol === 'High' ? 'show_chart' : hotel.vol === 'Low' ? 'horizontal_rule' : 'stacked_line_chart'}
                     </span>
                   </td>
-                  <td className="py-4 px-4" style={{ color: 'var(--color-text-secondary)' }}>
-                    {hotel.facilities.join(' • ')}
+                  <td className="py-4 px-4 capitalize" style={{ color: 'var(--color-text-secondary)' }}>
+                    {hotel.facilities.slice(0, 3).join(' • ')}
                   </td>
                 </tr>
               ))}
@@ -99,8 +132,10 @@ export default function CompetitorsPage() {
         <section className="clay-panel p-phi-lg h-[400px] flex flex-col">
           <h2 className="text-headline-mobile mb-phi-md" style={{ color: 'var(--color-text-primary)' }}>OTA Pricing Spread (Variance vs Direct)</h2>
           <div className="flex-1 clay-inset rounded-xl relative p-6 flex flex-col justify-around">
-             {/* Example Bars for OTA Disparity */}
-             {compSet.map((hotel, i) => {
+             {loading ? (
+               <p className="text-center text-gray-500">Calculating disparities...</p>
+             ) : compSet.map((hotel, i) => {
+               if (!hotel.cp || !hotel.ota) return null;
                const variance = hotel.cp - hotel.ota;
                const variancePercent = variance > 0 ? (variance / hotel.cp) * 100 : 0;
                return (

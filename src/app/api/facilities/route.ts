@@ -11,12 +11,18 @@ export async function GET() {
       orderBy: { name: 'asc' },
     });
 
+    const hotels = await prisma.hotel.findMany({ select: { slug: true } });
+
     // Group by facility name
     const facilityMap = new Map<string, { facility: string; category: string; hotels: Record<string, { available: boolean; quality: number }> }>();
 
     for (const f of facilities) {
       if (!facilityMap.has(f.name)) {
-        facilityMap.set(f.name, { facility: f.name, category: f.category, hotels: {} });
+        const hotelMap: Record<string, { available: boolean; quality: number }> = {};
+        for (const h of hotels) {
+          hotelMap[h.slug] = { available: false, quality: 0 };
+        }
+        facilityMap.set(f.name, { facility: f.name, category: f.category, hotels: hotelMap });
       }
       facilityMap.get(f.name)!.hotels[f.hotel.slug] = { available: f.available, quality: f.quality ?? 0 };
     }

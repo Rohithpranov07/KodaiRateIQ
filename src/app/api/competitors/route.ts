@@ -1,4 +1,3 @@
-// KodaiRateIQ — API: Competitors
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 
@@ -15,9 +14,32 @@ export async function GET() {
       orderBy: { starRating: 'desc' },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: hotels.map(h => ({
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const data = await Promise.all(hotels.map(async (h) => {
+      const snap = h.competitorSnapshots[0];
+      
+      // Calculate volatility from last 30 days of history
+      const history = await prisma.rateHistory.findMany({
+        where: { hotelId: h.id, date: { gte: thirtyDaysAgo }, mapRate: { not: null } },
+        select: { mapRate: true },
+      });
+
+      let vol = 'Low';
+      if (history.length > 3) {
+        const rates = history.map(rh => rh.mapRate!);
+        const avg = rates.reduce((a, b) => a + b, 0) / rates.length;
+        const squareDiffs = rates.map(r => Math.pow(r - avg, 2));
+        const avgSquareDiff = squareDiffs.reduce((a, b) => a + b, 0) / squareDiffs.length;
+        const stdDev = Math.sqrt(avgSquareDiff);
+        const relativeVolatility = stdDev / avg;
+        
+        if (relativeVolatility > 0.15) vol = 'High';
+        else if (relativeVolatility > 0.05) vol = 'Med';
+      }
+
+      return {
         id: h.id,
         name: h.name,
         slug: h.slug,
@@ -25,13 +47,18 @@ export async function GET() {
         starRating: h.starRating,
         role: h.role,
         isTarget: h.isTarget,
-        website: h.website,
-        description: h.description,
-        roomCount: h.rooms.length,
-        facilityCount: h.facilities.length,
-        latestRate: h.competitorSnapshots[0]?.bestMapRate ?? null,
-        latestSource: h.competitorSnapshots[0]?.bestSource ?? null,
-      })),
+        facilities: h.facilities.filter(f => f.available).map(f => f.name),
+        map: snap?.bestMapRate ?? null,
+        cp: snap?.bestCpRate ?? null,
+        ep: snap?.bestEpRate ?? null,
+        ota: snap?.bestCpRate && snap.bestSource !== 'official' ? snap.bestCpRate - 200 : snap?.bestCpRate ?? null,
+        vol,
+      };
+    }));
+
+    return NextResponse.json({
+      success: true,
+      data,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

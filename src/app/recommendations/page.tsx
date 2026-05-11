@@ -1,8 +1,37 @@
 'use client';
 
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { useState, useEffect } from 'react';
+import type { PricingRecommendation } from '@/types';
 
 export default function RecommendationsPage() {
+  const [recommendation, setRecommendation] = useState<PricingRecommendation | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchRecommendation = async () => {
+      try {
+        const res = await fetch('/api/recommendation');
+        if (!res.ok) throw new Error('Failed to fetch');
+        const data = await res.json();
+        if (data.success && data.data) {
+          setRecommendation(data.data);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchRecommendation();
+    const interval = setInterval(fetchRecommendation, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const confScore = recommendation ? Math.round(recommendation.confidenceScore * 100) : 0;
+  const strokeDash = confScore > 0 ? (confScore / 100) * 289 : 0;
+
   return (
     <DashboardLayout>
       {/* Header */}
@@ -32,17 +61,26 @@ export default function RecommendationsPage() {
               </div>
               <div className="flex items-baseline gap-4 mt-6">
                 <span className="text-data-mono text-2xl" style={{ color: 'var(--color-text-secondary)' }}>INR</span>
-                <span className="text-display-hero tracking-tighter" style={{ color: 'var(--color-text-primary)', fontWeight: 300 }}>14,250</span>
+                <span className="text-display-hero tracking-tighter" style={{ color: 'var(--color-text-primary)', fontWeight: 300 }}>
+                  {loading ? '...' : recommendation?.recommendedMapRate?.toLocaleString() ?? '--'}
+                </span>
                 <span className="text-body-md" style={{ color: 'var(--color-text-secondary)' }}>/ night</span>
               </div>
               <div className="mt-8 flex gap-8">
                 <div className="clay-inset p-4 rounded-xl">
-                  <p className="text-label-caps mb-1" style={{ color: 'var(--color-text-secondary)' }}>PROJECTED REVPAR</p>
-                  <p className="text-metric-xl" style={{ color: 'var(--color-positive)' }}>₹9,840 <span className="text-sm ml-1 text-green-700">↑ 12%</span></p>
+                  <p className="text-label-caps mb-1" style={{ color: 'var(--color-text-secondary)' }}>STRATEGY TYPE</p>
+                  <p className="text-metric-xl capitalize" style={{ color: 'var(--color-positive)' }}>
+                    {loading ? '...' : recommendation?.strategy || 'Balanced'}
+                  </p>
                 </div>
                 <div className="clay-inset p-4 rounded-xl">
-                  <p className="text-label-caps mb-1" style={{ color: 'var(--color-text-secondary)' }}>DEMAND SURGE</p>
-                  <p className="text-metric-xl" style={{ color: 'var(--color-text-primary)' }}>High <span className="text-sm ml-1" style={{ color: 'var(--color-text-secondary)' }}>Next 14 Days</span></p>
+                  <p className="text-label-caps mb-1" style={{ color: 'var(--color-text-secondary)' }}>DEMAND LEVEL</p>
+                  <p className="text-metric-xl capitalize" style={{ color: 'var(--color-text-primary)' }}>
+                    {loading ? '...' : recommendation?.demandLevel || 'Medium'}
+                    <span className="text-sm ml-2 capitalize" style={{ color: 'var(--color-text-secondary)' }}>
+                      {recommendation?.seasonType ? `(${recommendation.seasonType} Season)` : ''}
+                    </span>
+                  </p>
                 </div>
               </div>
             </div>
@@ -50,11 +88,13 @@ export default function RecommendationsPage() {
             {/* Confidence Meter */}
             <div className="relative w-48 h-48 flex items-center justify-center shrink-0 bg-white/40 rounded-full shadow-inner border border-white/50">
               <svg className="absolute w-[110%] h-[110%] -rotate-90" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(17,17,17,0.05)" strokeWidth="6" strokeDasharray="216 289" />
-                <circle cx="50" cy="50" r="46" fill="none" stroke="var(--color-gold)" strokeWidth="6" strokeDasharray="200 289" strokeLinecap="round" />
+                <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(17,17,17,0.05)" strokeWidth="6" strokeDasharray="289 289" />
+                <circle cx="50" cy="50" r="46" fill="none" stroke="var(--color-gold)" strokeWidth="6" strokeDasharray={`${strokeDash} 289`} strokeLinecap="round" className="transition-all duration-1000 ease-out" />
               </svg>
               <div className="absolute flex flex-col items-center justify-center">
-                <span className="text-display-hero" style={{ color: 'var(--color-text-primary)', fontSize: '3rem' }}>92<span className="text-2xl">%</span></span>
+                <span className="text-display-hero" style={{ color: 'var(--color-text-primary)', fontSize: '3rem' }}>
+                  {loading ? '--' : confScore}<span className="text-2xl">%</span>
+                </span>
                 <span className="text-label-caps mt-1" style={{ color: 'var(--color-text-secondary)' }}>CONFIDENCE</span>
               </div>
             </div>
@@ -62,7 +102,8 @@ export default function RecommendationsPage() {
           
           <div className="mt-8 z-10 clay-inset p-4 rounded-xl">
             <p className="text-body-md" style={{ color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
-              <strong>AI Reasoning:</strong> Analysis indicates a strong compression in the Kodai market due to upcoming regional holidays. Comp-set pricing is currently inelastic. Recommended to implement premium positioning immediately to capture unconstrained demand before OTA allotments deplete.
+              <strong>AI Reasoning: </strong> 
+              {loading ? 'Analyzing market conditions...' : recommendation?.reasoning || 'No analysis available for current date.'}
             </p>
           </div>
         </div>
@@ -75,25 +116,33 @@ export default function RecommendationsPage() {
             <div className="absolute top-4 right-4">
               <span className="material-symbols-outlined" style={{ color: 'var(--color-gold)' }}>check_circle</span>
             </div>
-            <h4 className="text-label-caps tracking-widest mb-2" style={{ color: 'var(--color-gold)' }}>PREMIUM POSITIONING</h4>
-            <p className="text-metric-xl mb-1" style={{ color: 'var(--color-text-primary)' }}>₹14,250</p>
-            <p className="text-data-mono" style={{ color: 'var(--color-text-secondary)' }}>Maximized Yield / 78% Occ.</p>
+            <h4 className="text-label-caps tracking-widest mb-2" style={{ color: 'var(--color-gold)' }}>OPTIMAL POSITIONING</h4>
+            <p className="text-metric-xl mb-1" style={{ color: 'var(--color-text-primary)' }}>
+              {loading ? '...' : `₹${recommendation?.optimalRate?.toLocaleString() ?? '--'}`}
+            </p>
+            <p className="text-data-mono capitalize" style={{ color: 'var(--color-text-secondary)' }}>
+              {recommendation?.strategy || 'Balanced'} Focus
+            </p>
           </div>
           
           {/* Aggressive */}
           <div className="clay-elevated rounded-2xl p-phi-lg cursor-pointer transition-transform hover:scale-[1.02] group"
             style={{ border: '1px solid transparent' }}>
-            <h4 className="text-label-caps tracking-widest mb-2" style={{ color: 'var(--color-text-secondary)' }}>AGGRESSIVE GROWTH</h4>
-            <p className="text-metric-xl mb-1" style={{ color: 'var(--color-text-primary)' }}>₹12,800</p>
-            <p className="text-data-mono" style={{ color: 'var(--color-text-secondary)' }}>Volume Focus / 92% Occ.</p>
+            <h4 className="text-label-caps tracking-widest mb-2" style={{ color: 'var(--color-text-secondary)' }}>AGGRESSIVE (Volume Focus)</h4>
+            <p className="text-metric-xl mb-1" style={{ color: 'var(--color-text-primary)' }}>
+              {loading ? '...' : `₹${recommendation?.minRate?.toLocaleString() ?? '--'}`}
+            </p>
+            <p className="text-data-mono" style={{ color: 'var(--color-text-secondary)' }}>Maximize Occupancy</p>
           </div>
           
           {/* Conservative */}
           <div className="clay-elevated rounded-2xl p-phi-lg cursor-pointer transition-transform hover:scale-[1.02] group"
             style={{ border: '1px solid transparent' }}>
-            <h4 className="text-label-caps tracking-widest mb-2" style={{ color: 'var(--color-text-secondary)' }}>CONSERVATIVE STABILITY</h4>
-            <p className="text-metric-xl mb-1" style={{ color: 'var(--color-text-primary)' }}>₹13,500</p>
-            <p className="text-data-mono" style={{ color: 'var(--color-text-secondary)' }}>Balanced / 85% Occ.</p>
+            <h4 className="text-label-caps tracking-widest mb-2" style={{ color: 'var(--color-text-secondary)' }}>CONSERVATIVE (Yield Focus)</h4>
+            <p className="text-metric-xl mb-1" style={{ color: 'var(--color-text-primary)' }}>
+              {loading ? '...' : `₹${recommendation?.maxRate?.toLocaleString() ?? '--'}`}
+            </p>
+            <p className="text-data-mono" style={{ color: 'var(--color-text-secondary)' }}>Maximize RevPAR</p>
           </div>
         </div>
 
@@ -106,9 +155,9 @@ export default function RecommendationsPage() {
               <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm" style={{ border: '2px solid var(--color-gold)' }} /><span className="text-data-mono" style={{ color: 'var(--color-text-secondary)' }}>Occupancy %</span></div>
             </div>
           </div>
-          {/* Chart Bars */}
+          {/* Chart Bars - Visual approximation based on demandLevel */}
           <div className="h-64 w-full flex items-end gap-3 relative pb-4 border-b border-[var(--color-border)]">
-            {[40, 50, 65, 85, 70, 60, 45].map((h, i) => (
+            {[40, 50, 65, recommendation?.demandLevel === 'high' ? 95 : recommendation?.demandLevel === 'low' ? 60 : 75, 70, 60, 45].map((h, i) => (
               <div key={i} className="flex-1 rounded-t-md transition-all hover:opacity-80 clay-inset" style={{
                 height: `${h}%`,
                 background: i === 3 ? 'var(--color-gold)' : 'var(--color-analytics)',
@@ -116,8 +165,8 @@ export default function RecommendationsPage() {
               }} />
             ))}
             <svg className="absolute inset-0 w-full h-full pointer-events-none pb-4" preserveAspectRatio="none" viewBox="0 0 100 100">
-              <path d="M 5 60 L 20 50 L 35 40 L 50 20 L 65 35 L 80 45 L 95 65" fill="none" stroke="var(--color-gold)" strokeLinejoin="round" strokeWidth="3" vectorEffect="non-scaling-stroke" />
-              <circle cx="50" cy="20" r="2.5" fill="var(--color-gold)" stroke="white" strokeWidth="1" />
+              <path d={`M 5 60 L 20 50 L 35 40 L 50 ${recommendation?.demandLevel === 'high' ? 10 : recommendation?.demandLevel === 'low' ? 35 : 20} L 65 35 L 80 45 L 95 65`} fill="none" stroke="var(--color-gold)" strokeLinejoin="round" strokeWidth="3" vectorEffect="non-scaling-stroke" />
+              <circle cx="50" cy={recommendation?.demandLevel === 'high' ? 10 : recommendation?.demandLevel === 'low' ? 35 : 20} r="2.5" fill="var(--color-gold)" stroke="white" strokeWidth="1" />
             </svg>
           </div>
           <div className="flex justify-between mt-4 text-data-mono" style={{ color: 'var(--color-text-secondary)' }}>
@@ -141,12 +190,12 @@ export default function RecommendationsPage() {
               <line x1="15" y1="70" x2="85" y2="30" stroke="var(--color-text-primary)" strokeWidth="0.5" />
             </svg>
             
-            {/* Data Polygons */}
+            {/* Data Polygons - Visual approximation */}
             <svg className="w-full h-full relative z-10" viewBox="0 0 100 100">
               {/* Comp Set Avg */}
               <polygon points="50,25 75,40 65,65 50,70 25,60 30,35" fill="var(--color-analytics)" stroke="var(--color-text-primary)" strokeWidth="1" opacity="0.3" />
               {/* Kodai Int */}
-              <polygon points="50,15 80,40 75,75 50,60 20,65 20,25" fill="rgba(198,167,105,0.4)" stroke="var(--color-gold)" strokeWidth="2" strokeLinejoin="round" />
+              <polygon points={`50,${recommendation?.marketPosition === 'above-market' ? 10 : 20} 80,40 75,75 50,60 20,65 20,25`} fill="rgba(198,167,105,0.4)" stroke="var(--color-gold)" strokeWidth="2" strokeLinejoin="round" />
             </svg>
             
             <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-data-mono font-medium" style={{ color: 'var(--color-text-primary)' }}>Rate Power</div>
