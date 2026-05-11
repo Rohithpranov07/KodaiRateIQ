@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>LUMINA Elite - Executive Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@200;300;400;500;600&amp;family=Inter:wght@400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-primary": "#006c49",
+                        "surface-tint": "#4edea3",
+                        "background": "#11131c",
+                        "on-background": "#e1e1ef",
+                        "surface-container-highest": "#32343f",
+                        "tertiary": "#adc6ff",
+                        "outline": "#86948a",
+                        "tertiary-container": "#71a1ff",
+                        "on-surface-variant": "#bbcabf",
+                        "on-error": "#690005",
+                        "on-tertiary-fixed": "#001a42",
+                        "on-primary-fixed": "#002113",
+                        "on-secondary-container": "#342800",
+                        "error-container": "#93000a",
+                        "primary-container": "#10b981",
+                        "secondary-fixed": "#ffe088",
+                        "surface": "#11131c",
+                        "on-secondary": "#3c2f00",
+                        "surface-bright": "#373943",
+                        "surface-dim": "#11131c",
+                        "on-primary-container": "#00422b",
+                        "surface-variant": "#32343f",
+                        "outline-variant": "#3c4a42",
+                        "secondary": "#e9c349",
+                        "on-tertiary-container": "#00367a",
+                        "on-secondary-fixed-variant": "#574500",
+                        "tertiary-fixed-dim": "#adc6ff",
+                        "on-secondary-fixed": "#241a00",
+                        "surface-container-lowest": "#0c0e17",
+                        "on-primary-fixed-variant": "#005236",
+                        "on-error-container": "#ffdad6",
+                        "surface-container-low": "#191b25",
+                        "inverse-on-surface": "#2e303a",
+                        "on-tertiary-fixed-variant": "#004395",
+                        "surface-container": "#1d1f29",
+                        "secondary-fixed-dim": "#e9c349",
+                        "secondary-container": "#af8d11",
+                        "on-tertiary": "#002e6a",
+                        "tertiary-fixed": "#d8e2ff",
+                        "inverse-surface": "#e1e1ef",
+                        "primary": "#4edea3",
+                        "error": "#ffb4ab",
+                        "primary-fixed": "#6ffbbe",
+                        "primary-fixed-dim": "#4edea3",
+                        "on-surface": "#e1e1ef",
+                        "surface-container-high": "#282933",
+                        "on-primary": "#003824"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "phi-md": "1rem",
+                        "phi-sm": "0.618rem",
+                        "margin": "2.5rem",
+                        "phi-lg": "1.618rem",
+                        "phi-xl": "2.618rem",
+                        "phi-xxl": "4.236rem",
+                        "gutter": "1.5rem"
+                    },
+                    "fontFamily": {
+                        "data-mono": ["Geist"],
+                        "headline-lg": ["Geist"],
+                        "body-md": ["Inter"],
+                        "metric-xl": ["Geist"],
+                        "display-hero": ["Geist"],
+                        "headline-lg-mobile": ["Geist"],
+                        "label-caps": ["Geist"]
+                    },
+                    "fontSize": {
+                        "data-mono": ["13px", {"lineHeight": "18px", "letterSpacing": "0em", "fontWeight": "400"}],
+                        "headline-lg": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "300"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "400"}],
+                        "metric-xl": ["32px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "500"}],
+                        "display-hero": ["72px", {"lineHeight": "80px", "letterSpacing": "-0.04em", "fontWeight": "200"}],
+                        "headline-lg-mobile": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "300"}],
+                        "label-caps": ["11px", {"lineHeight": "16px", "letterSpacing": "0.1em", "fontWeight": "600"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .glass-card {
+            background: rgba(40, 41, 51, 0.4);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(134, 148, 138, 0.1);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+        .glass-card:hover {
+            transform: scale(1.01);
+            border-color: rgba(134, 148, 138, 0.2);
+            transition: all 0.3s ease;
+        }
+        .glow-top-left {
+            position: relative;
+        }
+        .glow-top-left::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 40%;
+            height: 40%;
+            background: radial-gradient(circle, rgba(78,222,163,0.1) 0%, transparent 70%);
+            z-index: -1;
+            pointer-events: none;
+        }
+        .glow-text {
+            text-shadow: 0 0 10px rgba(78, 222, 163, 0.5);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col md:flex-row overflow-x-hidden selection:bg-primary/30 selection:text-primary">
+<!-- Mobile Top App Bar (Hidden on Desktop) -->
+<header class="md:hidden bg-background/60 backdrop-blur-3xl shadow-sm backdrop-saturate-150 docked full-width top-0 border-b border-outline-variant/10 fixed top-0 w-full z-50 flex justify-between items-center px-margin py-phi-sm">
+<div class="font-headline-lg-mobile text-primary tracking-tight font-light">LUMINA</div>
+<div class="flex gap-phi-md">
+<span class="material-symbols-outlined text-primary scale-95 active:scale-90 transition-transform cursor-pointer hover:text-surface-tint transition-colors duration-300">monitoring</span>
+<span class="material-symbols-outlined text-primary scale-95 active:scale-90 transition-transform cursor-pointer hover:text-surface-tint transition-colors duration-300">psychology</span>
+<div class="w-8 h-8 rounded-full bg-surface-container overflow-hidden border border-outline-variant/30">
+<img alt="Executive Portrait" class="w-full h-full object-cover" data-alt="A professional headshot of a mature male executive in a sharp navy suit. The lighting is dramatic and cinematic, creating a sense of authority. The background is a blurred modern office environment. The overall tone is luxurious, precise, and high-stakes, fitting a dark-mode elite dashboard aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuARo0MzVtWHzOD1dDFG4GFMllhXJVQO1zF9EjeFl0X0iqqLMuVlN16ImM257uMV-P4QWFBAlY_3xiXJDsLRmCaNANkf2JoNbdntDoPs7xERpw-kCqKPSfihRIfYjy3-TSi7CyvTOd-KA-IN1j9SpDqK8KYUTWDrERtcUYwaWCauoiISAPBCtl-jPIq_Mf0FcvHES_XMShAoDHU_2MNcDuX9S5TpFv-u5ys398JzUmXNot2RRANA3r_tPghJracxJI6lMxgCnBKsmS8"/>
+</div>
+</div>
+</header>
+<!-- Side Navigation (Desktop Only) -->
+<nav class="hidden md:flex flex-col bg-surface-container-lowest/80 backdrop-blur-2xl shadow-2xl shadow-background/50 docked left-0 h-full w-[280px] border-r border-outline-variant/10 fixed left-0 top-0 py-margin gap-phi-lg z-40">
+<div class="px-margin flex items-center gap-phi-sm mb-phi-xl group cursor-pointer group-hover:translate-x-1 duration-300">
+<div class="w-10 h-10 rounded-lg bg-surface-variant flex items-center justify-center border border-outline-variant/50 shadow-inner">
+<span class="material-symbols-outlined text-primary text-2xl">diamond</span>
+</div>
+<div>
+<h1 class="font-headline-lg-mobile text-primary font-light leading-none">Lumina Elite</h1>
+<span class="font-label-caps text-label-caps text-on-surface-variant opacity-70">Hospitality Intelligence</span>
+</div>
+</div>
+<ul class="flex-1 flex flex-col gap-2">
+<li class="px-margin py-phi-sm text-primary bg-primary/5 border-r-2 border-primary shadow-[inset_-10px_0_20px_-10px_rgba(78,222,163,0.2)] flex items-center gap-phi-md cursor-pointer group-hover:translate-x-1 duration-300">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="font-label-caps text-label-caps">Dashboard</span>
+</li>
+<li class="px-margin py-phi-sm text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500 flex items-center gap-phi-md cursor-pointer group-hover:translate-x-1 duration-300">
+<span class="material-symbols-outlined">trending_up</span>
+<span class="font-label-caps text-label-caps">Live Rates</span>
+</li>
+<li class="px-margin py-phi-sm text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500 flex items-center gap-phi-md cursor-pointer group-hover:translate-x-1 duration-300">
+<span class="material-symbols-outlined">auto_awesome</span>
+<span class="font-label-caps text-label-caps">AI Recommendations</span>
+</li>
+<li class="px-margin py-phi-sm text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500 flex items-center gap-phi-md cursor-pointer group-hover:translate-x-1 duration-300">
+<span class="material-symbols-outlined">groups</span>
+<span class="font-label-caps text-label-caps">Competitors</span>
+</li>
+<li class="px-margin py-phi-sm text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500 flex items-center gap-phi-md cursor-pointer group-hover:translate-x-1 duration-300">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label-caps text-label-caps">Analytics</span>
+</li>
+<li class="px-margin py-phi-sm text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500 flex items-center gap-phi-md cursor-pointer group-hover:translate-x-1 duration-300">
+<span class="material-symbols-outlined">apartment</span>
+<span class="font-label-caps text-label-caps">Hotels</span>
+</li>
+<li class="px-margin py-phi-sm text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500 flex items-center gap-phi-md cursor-pointer group-hover:translate-x-1 duration-300">
+<span class="material-symbols-outlined">lightbulb</span>
+<span class="font-label-caps text-label-caps">Insights</span>
+</li>
+</ul>
+<div class="mt-auto">
+<li class="px-margin py-phi-sm text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500 flex items-center gap-phi-md cursor-pointer group-hover:translate-x-1 duration-300 list-none">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-caps text-label-caps">Settings</span>
+</li>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-1 md:ml-[280px] pt-20 md:pt-0 p-margin flex flex-col gap-gutter max-w-[1600px] mx-auto w-full">
+<!-- Executive Hero -->
+<section class="glass-card rounded-xl p-phi-xl glow-top-left flex flex-col md:flex-row gap-gutter justify-between items-start md:items-center">
+<div>
+<span class="font-label-caps text-label-caps text-primary border border-primary/30 bg-primary/5 px-3 py-1 rounded-full mb-4 inline-block">PORTFOLIO SUMMARY</span>
+<h2 class="font-display-hero text-display-hero text-on-surface mt-2">KodaiRateIQ</h2>
+<p class="font-data-mono text-data-mono text-on-surface-variant mt-2 opacity-80">Last Updated: 14:02 EST • Real-Time Sync Active</p>
+</div>
+<div class="flex gap-phi-lg flex-wrap">
+<div class="bg-surface-container-low rounded-lg p-phi-md border border-outline-variant/20 min-w-[180px]">
+<span class="font-label-caps text-label-caps text-on-surface-variant">RevPAR (YTD)</span>
+<div class="font-metric-xl text-metric-xl text-primary glow-text mt-1">$142.50</div>
+<div class="font-data-mono text-data-mono text-secondary mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">arrow_upward</span> +4.2% vs LY
+                    </div>
+</div>
+<div class="bg-surface-container-low rounded-lg p-phi-md border border-outline-variant/20 min-w-[180px]">
+<span class="font-label-caps text-label-caps text-on-surface-variant">ADR</span>
+<div class="font-metric-xl text-metric-xl text-on-surface mt-1">$215.00</div>
+<div class="font-data-mono text-data-mono text-primary mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">arrow_upward</span> +1.8% vs COMP
+                    </div>
+</div>
+<div class="bg-surface-container-low rounded-lg p-phi-md border border-outline-variant/20 min-w-[180px]">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Occupancy</span>
+<div class="font-metric-xl text-metric-xl text-on-surface mt-1">78.4%</div>
+<div class="font-data-mono text-data-mono text-error mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">arrow_downward</span> -0.5% WoW
+                    </div>
+</div>
+</div>
+</section>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+<!-- Left Column (Span 8) -->
+<div class="md:col-span-8 flex flex-col gap-gutter">
+<!-- Revenue Analytics Chart -->
+<section class="glass-card rounded-xl p-phi-lg flex-1 min-h-[400px] flex flex-col">
+<div class="flex justify-between items-center mb-phi-md border-b border-outline-variant/20 pb-4">
+<h3 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Revenue Analytics</h3>
+<div class="flex gap-2">
+<span class="font-label-caps text-label-caps px-3 py-1 bg-surface-variant rounded text-on-surface-variant cursor-pointer hover:bg-surface-container-high">1D</span>
+<span class="font-label-caps text-label-caps px-3 py-1 bg-primary/20 text-primary border border-primary/30 rounded cursor-pointer">1W</span>
+<span class="font-label-caps text-label-caps px-3 py-1 bg-surface-variant rounded text-on-surface-variant cursor-pointer hover:bg-surface-container-high">1M</span>
+</div>
+</div>
+<div class="flex-1 w-full relative bg-surface-container-lowest/50 rounded border border-outline-variant/10 overflow-hidden group">
+<!-- Abstract Chart Representation using gradients -->
+<div class="absolute bottom-0 w-full h-[60%] bg-gradient-to-t from-primary/10 to-transparent"></div>
+<svg class="absolute bottom-0 w-full h-full" preserveaspectratio="none" viewbox="0 0 100 100">
+<path d="M0,80 L10,75 L20,85 L30,60 L40,65 L50,40 L60,45 L70,20 L80,30 L90,10 L100,15 L100,100 L0,100 Z" fill="rgba(78,222,163,0.05)"></path>
+<path class="opacity-80" d="M0,80 L10,75 L20,85 L30,60 L40,65 L50,40 L60,45 L70,20 L80,30 L90,10 L100,15" fill="none" stroke="#4edea3" stroke-width="0.5"></path>
+<path class="opacity-50" d="M0,90 L20,80 L40,85 L60,60 L80,65 L100,40" fill="none" stroke="#e9c349" stroke-dasharray="1 1" stroke-width="0.3"></path>
+</svg>
+<div class="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:40px_40px] opacity-20"></div>
+<!-- Tooltip Hover Simulation -->
+<div class="hidden group-hover:block absolute top-[20%] left-[70%] bg-surface-container-highest border border-primary/50 rounded p-2 shadow-xl backdrop-blur-md z-10 pointer-events-none">
+<div class="font-label-caps text-label-caps text-on-surface-variant mb-1">Nov 14, 12:00</div>
+<div class="font-data-mono text-data-mono text-primary">$245.50 <span class="text-on-surface-variant text-[10px]">RevPAR</span></div>
+</div>
+</div>
+</section>
+<!-- Competitor Comparison -->
+<section class="glass-card rounded-xl p-phi-lg">
+<h3 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface mb-phi-md">Competitor Matrix</h3>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-outline-variant/30 font-label-caps text-label-caps text-on-surface-variant">
+<th class="py-3 px-4 font-normal">Property</th>
+<th class="py-3 px-4 font-normal text-right">Current Rate</th>
+<th class="py-3 px-4 font-normal text-right">Var to Us</th>
+<th class="py-3 px-4 font-normal text-center">Trend</th>
+</tr>
+</thead>
+<tbody class="font-data-mono text-data-mono">
+<tr class="border-b border-outline-variant/10 hover:bg-surface-variant/20 transition-colors">
+<td class="py-3 px-4 flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-secondary"></div>
+                                        Carlton
+                                    </td>
+<td class="py-3 px-4 text-right">$240</td>
+<td class="py-3 px-4 text-right text-primary">-$25</td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-sm text-secondary">horizontal_rule</span></td>
+</tr>
+<tr class="border-b border-outline-variant/10 hover:bg-surface-variant/20 transition-colors">
+<td class="py-3 px-4 flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-outline"></div>
+                                        Tamara
+                                    </td>
+<td class="py-3 px-4 text-right">$210</td>
+<td class="py-3 px-4 text-right text-error">+$5</td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-sm text-primary">trending_up</span></td>
+</tr>
+<tr class="border-b border-outline-variant/10 hover:bg-surface-variant/20 transition-colors">
+<td class="py-3 px-4 flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-outline"></div>
+                                        Sterling
+                                    </td>
+<td class="py-3 px-4 text-right">$195</td>
+<td class="py-3 px-4 text-right text-error">+$20</td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-sm text-error">trending_down</span></td>
+</tr>
+<tr class="hover:bg-surface-variant/20 transition-colors">
+<td class="py-3 px-4 flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-outline"></div>
+                                        Le Poshe
+                                    </td>
+<td class="py-3 px-4 text-right">$180</td>
+<td class="py-3 px-4 text-right text-error">+$35</td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-sm text-secondary">horizontal_rule</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+<!-- Right Column (Span 4) -->
+<div class="md:col-span-4 flex flex-col gap-gutter">
+<!-- AI Recommendations -->
+<section class="glass-card rounded-xl p-phi-lg relative overflow-hidden border-primary/30">
+<div class="absolute top-0 right-0 p-4 opacity-10">
+<span class="material-symbols-outlined text-6xl text-primary">auto_awesome</span>
+</div>
+<div class="flex items-center gap-2 mb-phi-md relative z-10">
+<span class="material-symbols-outlined text-primary">psychology</span>
+<h3 class="font-headline-lg-mobile text-headline-lg-mobile text-primary font-light">AI Engine</h3>
+</div>
+<div class="flex flex-col gap-4 relative z-10">
+<div class="bg-surface-container-high p-4 rounded border border-outline-variant/30 hover:border-primary/50 transition-colors cursor-pointer">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-caps text-label-caps text-error bg-error/10 px-2 py-0.5 rounded">High Priority</span>
+<span class="font-data-mono text-data-mono text-on-surface-variant text-xs">2m ago</span>
+</div>
+<p class="font-body-md text-sm text-on-surface mb-3">Demand spike detected for weekend of Nov 24. Carlton increased rates by 12%.</p>
+<button class="w-full py-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/50 rounded font-label-caps transition-colors">Apply +8% Rate Increase</button>
+</div>
+<div class="bg-surface-container-high p-4 rounded border border-outline-variant/30 hover:border-primary/50 transition-colors cursor-pointer">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-caps text-label-caps text-secondary bg-secondary/10 px-2 py-0.5 rounded">Medium Priority</span>
+<span class="font-data-mono text-data-mono text-on-surface-variant text-xs">15m ago</span>
+</div>
+<p class="font-body-md text-sm text-on-surface mb-3">Corporate booking window closing for Dec group block. Current pickup lagging 5%.</p>
+<button class="w-full py-2 border border-outline-variant text-on-surface-variant hover:text-on-surface hover:bg-surface-variant rounded font-label-caps transition-colors">Release 10 Rooms to OTA</button>
+</div>
+</div>
+</section>
+<!-- Live Rate Board -->
+<section class="glass-card rounded-xl p-phi-lg flex-1 flex flex-col">
+<h3 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface mb-phi-sm flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-error animate-pulse"></span>
+                        Live Ticker
+                    </h3>
+<div class="flex-1 flex flex-col gap-0 overflow-y-auto pr-2" style="max-height: 300px;">
+<!-- Ticker Items -->
+<div class="py-3 border-b border-outline-variant/10 flex justify-between items-center group">
+<div>
+<div class="font-label-caps text-label-caps text-on-surface group-hover:text-primary transition-colors">KDI-STD</div>
+<div class="font-data-mono text-data-mono text-on-surface-variant text-[10px]">Standard King</div>
+</div>
+<div class="text-right">
+<div class="font-data-mono text-data-mono text-primary flex items-center justify-end gap-1"><span class="material-symbols-outlined text-[12px]">arrow_upward</span> $215</div>
+<div class="font-data-mono text-data-mono text-on-surface-variant text-[10px]">Vol: High</div>
+</div>
+</div>
+<div class="py-3 border-b border-outline-variant/10 flex justify-between items-center group">
+<div>
+<div class="font-label-caps text-label-caps text-on-surface group-hover:text-primary transition-colors">KDI-DLX</div>
+<div class="font-data-mono text-data-mono text-on-surface-variant text-[10px]">Deluxe Suite</div>
+</div>
+<div class="text-right">
+<div class="font-data-mono text-data-mono text-on-surface flex items-center justify-end gap-1"><span class="material-symbols-outlined text-[12px] text-secondary">horizontal_rule</span> $340</div>
+<div class="font-data-mono text-data-mono text-on-surface-variant text-[10px]">Vol: Med</div>
+</div>
+</div>
+<div class="py-3 border-b border-outline-variant/10 flex justify-between items-center group">
+<div>
+<div class="font-label-caps text-label-caps text-on-surface group-hover:text-primary transition-colors">KDI-VIL</div>
+<div class="font-data-mono text-data-mono text-on-surface-variant text-[10px]">Premium Villa</div>
+</div>
+<div class="text-right">
+<div class="font-data-mono text-data-mono text-error flex items-center justify-end gap-1"><span class="material-symbols-outlined text-[12px]">arrow_downward</span> $550</div>
+<div class="font-data-mono text-data-mono text-on-surface-variant text-[10px]">Vol: Low</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+</body></html>

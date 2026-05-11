@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Competitor Analytics - KodaiRateIQ</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Note: Satoshi is a premium/custom font, assuming it's loaded via a project-specific asset pipeline in a real environment. Fallbacks will apply. -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-tint": "#735b25",
+                      "surface-container-low": "#eef4ff",
+                      "on-secondary-fixed": "#1f1b17",
+                      "error": "#ba1a1a",
+                      "on-background": "#111c29",
+                      "on-tertiary-fixed-variant": "#0e5138",
+                      "surface": "#f8f9ff",
+                      "tertiary-fixed": "#b1f0ce",
+                      "secondary-fixed-dim": "#cec5be",
+                      "surface-variant": "#d8e3f5",
+                      "on-error": "#ffffff",
+                      "primary-container": "#c6a769",
+                      "on-primary-fixed": "#261900",
+                      "inverse-surface": "#26313f",
+                      "primary": "#735b25",
+                      "primary-fixed-dim": "#e3c282",
+                      "surface-bright": "#f8f9ff",
+                      "on-primary-container": "#513c07",
+                      "on-tertiary": "#ffffff",
+                      "inverse-primary": "#e3c282",
+                      "on-tertiary-container": "#014931",
+                      "on-secondary-container": "#68625c",
+                      "on-tertiary-fixed": "#002114",
+                      "surface-container-lowest": "#ffffff",
+                      "tertiary": "#2c694e",
+                      "error-container": "#ffdad6",
+                      "secondary-container": "#e7ded7",
+                      "surface-container": "#e5efff",
+                      "tertiary-fixed-dim": "#95d4b3",
+                      "on-surface": "#111c29",
+                      "surface-container-highest": "#d8e3f5",
+                      "on-secondary": "#ffffff",
+                      "background": "#f8f9ff",
+                      "tertiary-container": "#7ab898",
+                      "on-secondary-fixed-variant": "#4b4641",
+                      "surface-container-high": "#dee9fb",
+                      "outline-variant": "#d0c5b5",
+                      "on-primary-fixed-variant": "#5a430e",
+                      "on-surface-variant": "#4d463a",
+                      "secondary": "#635d58",
+                      "on-primary": "#ffffff",
+                      "primary-fixed": "#ffdea0",
+                      "surface-dim": "#d0dbec",
+                      "on-error-container": "#93000a",
+                      "outline": "#7f7668",
+                      "secondary-fixed": "#eae1da",
+                      "inverse-on-surface": "#e9f1ff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "margin-desktop": "40px",
+                      "unit": "8px",
+                      "gutter": "24px",
+                      "container-max-width": "1440px",
+                      "margin-mobile": "16px"
+              },
+              "fontFamily": {
+                      "headline-lg": ["Satoshi", "sans-serif"],
+                      "label-caps": ["Inter", "sans-serif"],
+                      "body-md": ["Inter", "sans-serif"],
+                      "body-lg": ["Inter", "sans-serif"],
+                      "headline-xl": ["Satoshi", "sans-serif"],
+                      "display-lg": ["Satoshi", "sans-serif"],
+                      "data-mono": ["Inter", "monospace"]
+              },
+              "fontSize": {
+                      "headline-lg": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                      "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.08em", "fontWeight": "600"}],
+                      "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                      "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                      "headline-xl": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "display-lg": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "data-mono": ["14px", {"lineHeight": "1.0", "fontWeight": "500"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        /* Custom claymorphism shadow utility for content to match JSON style */
+        .clay-panel {
+            box-shadow: 0 12px 24px -8px rgba(64,59,54,0.08);
+        }
+        .clay-inset {
+            box-shadow: inset 1px 1px 2px rgba(0,0,0,0.05);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md text-body-md antialiased flex">
+<!-- SideNavBar (Shared Component) -->
+<nav class="hidden md:flex fixed left-0 top-0 h-full flex-col z-50 border-r border-outline-variant/30 w-72 bg-surface-container-low dark:bg-surface-container shadow-[inset_1px_1px_2px_rgba(0,0,0,0.05)] shadow-[0_12px_24px_-8px_rgba(64,59,54,0.08)]">
+<!-- Header -->
+<div class="p-6 border-b border-outline-variant/30 flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container">query_stats</span>
+</div>
+<div>
+<h1 class="font-headline-lg text-headline-lg font-bold text-primary dark:text-primary-fixed-dim">KodaiRateIQ</h1>
+<p class="font-label-caps text-label-caps text-on-secondary-container mt-1">Revenue Intelligence</p>
+</div>
+</div>
+<!-- Scrollable Tabs -->
+<div class="flex-1 overflow-y-auto py-4">
+<ul class="space-y-1">
+<!-- Inactive Tab -->
+<li>
+<a class="text-on-secondary-fixed-variant dark:text-on-secondary-fixed-variant font-body-md py-3 px-6 flex items-center gap-4 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-300 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                        Dashboard
+                    </a>
+</li>
+<li>
+<a class="text-on-secondary-fixed-variant dark:text-on-secondary-fixed-variant font-body-md py-3 px-6 flex items-center gap-4 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-300 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">payments</span>
+                        Live Rates
+                    </a>
+</li>
+<li>
+<a class="text-on-secondary-fixed-variant dark:text-on-secondary-fixed-variant font-body-md py-3 px-6 flex items-center gap-4 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-300 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">auto_awesome</span>
+                        AI Recommendations
+                    </a>
+</li>
+<!-- Active Tab -->
+<li>
+<a class="text-primary dark:text-primary-fixed-dim font-bold border-r-4 border-primary dark:border-primary-fixed-dim bg-surface-bright dark:bg-surface-container-highest shadow-sm py-3 px-6 flex items-center gap-4 transition-all duration-300 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">groups</span>
+                        Competitors
+                    </a>
+</li>
+<li>
+<a class="text-on-secondary-fixed-variant dark:text-on-secondary-fixed-variant font-body-md py-3 px-6 flex items-center gap-4 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-300 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">history</span>
+                        Historical Analytics
+                    </a>
+</li>
+<li>
+<a class="text-on-secondary-fixed-variant dark:text-on-secondary-fixed-variant font-body-md py-3 px-6 flex items-center gap-4 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-300 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">hotel</span>
+                        Hotels
+                    </a>
+</li>
+<li>
+<a class="text-on-secondary-fixed-variant dark:text-on-secondary-fixed-variant font-body-md py-3 px-6 flex items-center gap-4 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-300 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">lightbulb</span>
+                        Insights
+                    </a>
+</li>
+<li>
+<a class="text-on-secondary-fixed-variant dark:text-on-secondary-fixed-variant font-body-md py-3 px-6 flex items-center gap-4 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-300 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">settings</span>
+                        Settings
+                    </a>
+</li>
+</ul>
+</div>
+<!-- Footer -->
+<div class="p-4 border-t border-outline-variant/30">
+<a class="text-on-secondary-fixed-variant dark:text-on-secondary-fixed-variant font-body-md py-3 px-4 flex items-center gap-4 hover:bg-surface-container-high dark:hover:bg-surface-container-highest rounded-lg transition-all duration-300 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">person</span>
+                Profile
+            </a>
+</div>
+</nav>
+<!-- Main Content Canvas Wrapper -->
+<div class="flex-1 md:ml-72 flex flex-col min-h-screen relative w-full">
+<!-- TopAppBar (Shared Component) -->
+<header class="flex justify-between items-center w-full px-margin-desktop h-16 sticky top-0 z-40 bg-surface dark:bg-background bg-surface-container-low dark:bg-surface-container shadow-[inset_1px_1px_2px_rgba(0,0,0,0.05)] shadow-[0_4px_12px_-4px_rgba(64,59,54,0.08)]">
+<div class="flex items-center gap-4 md:hidden">
+<span class="font-headline-lg text-headline-lg font-bold text-primary dark:text-primary-fixed-dim">KodaiRateIQ</span>
+</div>
+<!-- Spacer for Web -->
+<div class="hidden md:block flex-1"></div>
+<div class="flex items-center gap-gutter text-on-secondary-fixed-variant dark:text-on-secondary-fixed-variant">
+<button class="hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 active:scale-95 transition-transform duration-150">
+<span class="material-symbols-outlined">sync</span>
+</button>
+<button class="hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 active:scale-95 transition-transform duration-150 relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-error rounded-full border border-surface"></span>
+</button>
+<button class="hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 active:scale-95 transition-transform duration-150 flex items-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 w-full max-w-container-max-width mx-auto p-margin-mobile md:p-margin-desktop">
+<!-- Page Header -->
+<div class="mb-gutter flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div>
+<h2 class="font-headline-xl text-headline-xl text-on-background">Competitor Landscape</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Kodai Market Deep Dive &amp; Parity Analysis</p>
+</div>
+<div class="flex items-center gap-2">
+<button class="px-4 py-2 rounded-lg bg-surface-container-high text-on-surface-variant font-label-caps text-label-caps flex items-center gap-2 clay-inset">
+<span class="material-symbols-outlined text-[18px]">calendar_today</span>
+                        Last 30 Days
+                    </button>
+<button class="px-4 py-2 rounded-lg bg-primary text-on-primary font-label-caps text-label-caps shadow-sm flex items-center gap-2 relative overflow-hidden group">
+<span class="absolute inset-x-0 top-0 h-[1px] bg-white/20"></span>
+<span class="material-symbols-outlined text-[18px]">download</span>
+                        Export Report
+                    </button>
+</div>
+</div>
+<!-- Bento Grid Dashboard -->
+<div class="grid grid-cols-12 gap-gutter">
+<!-- Positioning Matrix (Col Span 12) -->
+<div class="col-span-12 bg-surface-container-lowest rounded-xl clay-panel p-6 flex flex-col">
+<div class="flex items-center justify-between mb-4 border-b border-surface-container-high pb-4">
+<h3 class="font-headline-lg text-headline-lg text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">scatter_plot</span>
+                            Positioning Matrix
+                        </h3>
+<span class="font-label-caps text-label-caps px-3 py-1 bg-surface-container text-on-surface-variant rounded-full border border-outline-variant/20">Luxury vs MAP Price</span>
+</div>
+<div class="bg-surface-container-low rounded-lg clay-inset p-6 flex-1 min-h-[300px] relative">
+<!-- Y-Axis Label -->
+<div class="absolute left-4 top-1/2 -translate-y-1/2 -rotate-90 origin-center font-label-caps text-label-caps text-on-secondary-container tracking-widest whitespace-nowrap">
+                            Luxury Index
+                        </div>
+<!-- X-Axis Label -->
+<div class="absolute bottom-2 left-1/2 -translate-x-1/2 font-label-caps text-label-caps text-on-secondary-container tracking-widest">
+                            MAP Price (INR)
+                        </div>
+<!-- Grid Lines -->
+<div class="absolute inset-x-12 inset-y-8 border-l border-b border-outline-variant/40 flex flex-col justify-between">
+<div class="w-full border-t border-outline-variant/20 border-dashed h-0"></div>
+<div class="w-full border-t border-outline-variant/20 border-dashed h-0"></div>
+<div class="w-full border-t border-outline-variant/20 border-dashed h-0"></div>
+<div class="w-full border-t border-outline-variant/20 border-dashed h-0"></div>
+</div>
+<!-- Scatter Points (Simulated) -->
+<div class="absolute inset-x-12 inset-y-8">
+<!-- Carlton (High Lux, High Price) -->
+<div class="absolute top-[15%] left-[80%] flex flex-col items-center group cursor-pointer -translate-x-1/2 -translate-y-1/2 z-10">
+<div class="w-6 h-6 rounded-full bg-primary border-2 border-surface-container-lowest shadow-md transition-transform group-hover:scale-125"></div>
+<span class="mt-2 font-data-mono text-data-mono text-on-surface bg-surface-container-lowest px-2 py-0.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Carlton</span>
+</div>
+<!-- Tamara (High Lux, V.High Price) -->
+<div class="absolute top-[10%] left-[90%] flex flex-col items-center group cursor-pointer -translate-x-1/2 -translate-y-1/2 z-10">
+<div class="w-6 h-6 rounded-full bg-tertiary border-2 border-surface-container-lowest shadow-md transition-transform group-hover:scale-125"></div>
+<span class="mt-2 font-data-mono text-data-mono text-on-surface bg-surface-container-lowest px-2 py-0.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Tamara</span>
+</div>
+<!-- HKI (Mid Lux, Mid Price) -->
+<div class="absolute top-[40%] left-[50%] flex flex-col items-center group cursor-pointer -translate-x-1/2 -translate-y-1/2 z-10">
+<div class="w-6 h-6 rounded-full bg-secondary border-2 border-surface-container-lowest shadow-md transition-transform group-hover:scale-125"></div>
+<span class="mt-2 font-data-mono text-data-mono text-on-surface bg-surface-container-lowest px-2 py-0.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">HKI</span>
+</div>
+<!-- Sterling (Mid Lux, Low-Mid Price) -->
+<div class="absolute top-[50%] left-[30%] flex flex-col items-center group cursor-pointer -translate-x-1/2 -translate-y-1/2 z-10">
+<div class="w-6 h-6 rounded-full bg-surface-tint border-2 border-surface-container-lowest shadow-md transition-transform group-hover:scale-125"></div>
+<span class="mt-2 font-data-mono text-data-mono text-on-surface bg-surface-container-lowest px-2 py-0.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Sterling</span>
+</div>
+<!-- Le Poshe (Low-Mid Lux, Low Price) -->
+<div class="absolute top-[70%] left-[15%] flex flex-col items-center group cursor-pointer -translate-x-1/2 -translate-y-1/2 z-10">
+<div class="w-6 h-6 rounded-full bg-on-secondary-container border-2 border-surface-container-lowest shadow-md transition-transform group-hover:scale-125"></div>
+<span class="mt-2 font-data-mono text-data-mono text-on-surface bg-surface-container-lowest px-2 py-0.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Le Poshe</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Facility Comparison Matrix (Col Span 8) -->
+<div class="col-span-12 lg:col-span-8 bg-surface-container-lowest rounded-xl clay-panel p-6 flex flex-col">
+<div class="flex items-center justify-between mb-4 border-b border-surface-container-high pb-4">
+<h3 class="font-headline-lg text-headline-lg text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">view_comfy_alt</span>
+                            Facility Parity
+                        </h3>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="font-label-caps text-label-caps text-on-secondary-container border-b border-outline-variant/30">
+<th class="py-3 px-4 font-semibold">Property</th>
+<th class="py-3 px-4 font-semibold text-center">Spa</th>
+<th class="py-3 px-4 font-semibold text-center">Lake View</th>
+<th class="py-3 px-4 font-semibold text-center">Restaurant</th>
+<th class="py-3 px-4 font-semibold text-center">Bar</th>
+<th class="py-3 px-4 font-semibold text-center">Parking</th>
+<th class="py-3 px-4 font-semibold text-center">WiFi</th>
+</tr>
+</thead>
+<tbody class="font-data-mono text-data-mono text-on-surface divide-y divide-surface-container-high">
+<!-- Row 1 -->
+<tr class="bg-surface-container-low clay-inset my-1 rounded-lg">
+<td class="py-3 px-4 font-semibold text-primary">Carlton</td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+</tr>
+<!-- Row 2 -->
+<tr>
+<td class="py-3 px-4 font-medium">Tamara</td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-error text-[20px]">cancel</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+</tr>
+<!-- Row 3 -->
+<tr>
+<td class="py-3 px-4 font-medium">HKI</td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-error text-[20px]">cancel</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-error text-[20px]">cancel</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+</tr>
+<!-- Row 4 -->
+<tr>
+<td class="py-3 px-4 font-medium">Sterling</td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-error text-[20px]">cancel</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+</tr>
+<!-- Row 5 -->
+<tr>
+<td class="py-3 px-4 font-medium">Le Poshe</td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-error text-[20px]">cancel</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-error text-[20px]">cancel</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+<td class="py-3 px-4 text-center"><span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Market Volatility (Col Span 4) -->
+<div class="col-span-12 lg:col-span-4 bg-surface-container-lowest rounded-xl clay-panel p-6 flex flex-col">
+<div class="flex items-center justify-between mb-4 border-b border-surface-container-high pb-4">
+<h3 class="font-headline-lg text-headline-lg text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">show_chart</span>
+                            Volatility
+                        </h3>
+</div>
+<div class="flex-1 flex flex-col justify-center gap-4">
+<!-- Bar Item -->
+<div>
+<div class="flex justify-between font-data-mono text-data-mono mb-1">
+<span class="text-on-surface">Carlton</span>
+<span class="text-on-secondary-container">12 changes</span>
+</div>
+<div class="w-full h-3 bg-surface-container-low rounded-full clay-inset overflow-hidden">
+<div class="h-full bg-primary w-[80%] rounded-full shadow-sm"></div>
+</div>
+</div>
+<!-- Bar Item -->
+<div>
+<div class="flex justify-between font-data-mono text-data-mono mb-1">
+<span class="text-on-surface">Tamara</span>
+<span class="text-on-secondary-container">8 changes</span>
+</div>
+<div class="w-full h-3 bg-surface-container-low rounded-full clay-inset overflow-hidden">
+<div class="h-full bg-tertiary w-[55%] rounded-full shadow-sm"></div>
+</div>
+</div>
+<!-- Bar Item -->
+<div>
+<div class="flex justify-between font-data-mono text-data-mono mb-1">
+<span class="text-on-surface">Sterling</span>
+<span class="text-on-secondary-container">5 changes</span>
+</div>
+<div class="w-full h-3 bg-surface-container-low rounded-full clay-inset overflow-hidden">
+<div class="h-full bg-secondary w-[35%] rounded-full shadow-sm"></div>
+</div>
+</div>
+<!-- Bar Item -->
+<div>
+<div class="flex justify-between font-data-mono text-data-mono mb-1">
+<span class="text-on-surface">HKI</span>
+<span class="text-on-secondary-container">2 changes</span>
+</div>
+<div class="w-full h-3 bg-surface-container-low rounded-full clay-inset overflow-hidden">
+<div class="h-full bg-outline w-[15%] rounded-full shadow-sm"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- OTA Pricing Spread (Col Span 12) -->
+<div class="col-span-12 bg-surface-container-lowest rounded-xl clay-panel p-6 flex flex-col">
+<div class="flex items-center justify-between mb-6 border-b border-surface-container-high pb-4">
+<h3 class="font-headline-lg text-headline-lg text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">price_change</span>
+                            OTA Pricing Spread
+                        </h3>
+<span class="font-label-caps text-label-caps px-3 py-1 bg-surface-container text-on-surface-variant rounded-full border border-outline-variant/20">Booking.com vs Agoda vs MMYT</span>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+<!-- Spread Card -->
+<div class="bg-surface-container-low clay-inset p-4 rounded-lg border border-outline-variant/20">
+<h4 class="font-label-caps text-label-caps text-on-secondary-container mb-2">Carlton</h4>
+<div class="flex items-end gap-2 mb-2">
+<span class="font-headline-xl text-headline-xl text-error">12%</span>
+<span class="font-data-mono text-data-mono text-on-surface-variant pb-1">spread</span>
+</div>
+<div class="flex justify-between text-data-mono text-on-secondary-container">
+<span>₹14k</span>
+<div class="flex-1 mx-2 border-b border-dashed border-outline-variant/50 mb-1.5"></div>
+<span>₹16k</span>
+</div>
+</div>
+<!-- Spread Card -->
+<div class="bg-surface-container-low clay-inset p-4 rounded-lg border border-outline-variant/20">
+<h4 class="font-label-caps text-label-caps text-on-secondary-container mb-2">Tamara</h4>
+<div class="flex items-end gap-2 mb-2">
+<span class="font-headline-xl text-headline-xl text-tertiary">2%</span>
+<span class="font-data-mono text-data-mono text-on-surface-variant pb-1">spread</span>
+</div>
+<div class="flex justify-between text-data-mono text-on-secondary-container">
+<span>₹18k</span>
+<div class="flex-1 mx-2 border-b border-dashed border-outline-variant/50 mb-1.5"></div>
+<span>₹18.4k</span>
+</div>
+</div>
+<!-- Spread Card -->
+<div class="bg-surface-container-low clay-inset p-4 rounded-lg border border-outline-variant/20">
+<h4 class="font-label-caps text-label-caps text-on-secondary-container mb-2">HKI</h4>
+<div class="flex items-end gap-2 mb-2">
+<span class="font-headline-xl text-headline-xl text-on-surface">5%</span>
+<span class="font-data-mono text-data-mono text-on-surface-variant pb-1">spread</span>
+</div>
+<div class="flex justify-between text-data-mono text-on-secondary-container">
+<span>₹8k</span>
+<div class="flex-1 mx-2 border-b border-dashed border-outline-variant/50 mb-1.5"></div>
+<span>₹8.4k</span>
+</div>
+</div>
+<!-- Spread Card -->
+<div class="bg-surface-container-low clay-inset p-4 rounded-lg border border-outline-variant/20">
+<h4 class="font-label-caps text-label-caps text-on-secondary-container mb-2">Sterling</h4>
+<div class="flex items-end gap-2 mb-2">
+<span class="font-headline-xl text-headline-xl text-error">15%</span>
+<span class="font-data-mono text-data-mono text-on-surface-variant pb-1">spread</span>
+</div>
+<div class="flex justify-between text-data-mono text-on-secondary-container">
+<span>₹6k</span>
+<div class="flex-1 mx-2 border-b border-dashed border-outline-variant/50 mb-1.5"></div>
+<span>₹7.2k</span>
+</div>
+</div>
+<!-- Spread Card -->
+<div class="bg-surface-container-low clay-inset p-4 rounded-lg border border-outline-variant/20">
+<h4 class="font-label-caps text-label-caps text-on-secondary-container mb-2">Le Poshe</h4>
+<div class="flex items-end gap-2 mb-2">
+<span class="font-headline-xl text-headline-xl text-on-surface">4%</span>
+<span class="font-data-mono text-data-mono text-on-surface-variant pb-1">spread</span>
+</div>
+<div class="flex justify-between text-data-mono text-on-secondary-container">
+<span>₹5k</span>
+<div class="flex-1 mx-2 border-b border-dashed border-outline-variant/50 mb-1.5"></div>
+<span>₹5.2k</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

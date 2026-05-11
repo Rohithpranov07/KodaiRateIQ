@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AI Recommendations | KodaiRateIQ</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Satoshi:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-tint": "#735b25",
+                      "surface-container-low": "#eef4ff",
+                      "on-secondary-fixed": "#1f1b17",
+                      "error": "#ba1a1a",
+                      "on-background": "#111c29",
+                      "on-tertiary-fixed-variant": "#0e5138",
+                      "surface": "#f8f9ff",
+                      "tertiary-fixed": "#b1f0ce",
+                      "secondary-fixed-dim": "#cec5be",
+                      "surface-variant": "#d8e3f5",
+                      "on-error": "#ffffff",
+                      "primary-container": "#c6a769",
+                      "on-primary-fixed": "#261900",
+                      "inverse-surface": "#26313f",
+                      "primary": "#735b25",
+                      "primary-fixed-dim": "#e3c282",
+                      "surface-bright": "#f8f9ff",
+                      "on-primary-container": "#513c07",
+                      "on-tertiary": "#ffffff",
+                      "inverse-primary": "#e3c282",
+                      "on-tertiary-container": "#014931",
+                      "on-secondary-container": "#68625c",
+                      "on-tertiary-fixed": "#002114",
+                      "surface-container-lowest": "#ffffff",
+                      "tertiary": "#2c694e",
+                      "error-container": "#ffdad6",
+                      "secondary-container": "#e7ded7",
+                      "surface-container": "#e5efff",
+                      "tertiary-fixed-dim": "#95d4b3",
+                      "on-surface": "#111c29",
+                      "surface-container-highest": "#d8e3f5",
+                      "on-secondary": "#ffffff",
+                      "background": "#f8f9ff",
+                      "tertiary-container": "#7ab898",
+                      "on-secondary-fixed-variant": "#4b4641",
+                      "surface-container-high": "#dee9fb",
+                      "outline-variant": "#d0c5b5",
+                      "on-primary-fixed-variant": "#5a430e",
+                      "on-surface-variant": "#4d463a",
+                      "secondary": "#635d58",
+                      "on-primary": "#ffffff",
+                      "primary-fixed": "#ffdea0",
+                      "surface-dim": "#d0dbec",
+                      "on-error-container": "#93000a",
+                      "outline": "#7f7668",
+                      "secondary-fixed": "#eae1da",
+                      "inverse-on-surface": "#e9f1ff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "margin-desktop": "40px",
+                      "unit": "8px",
+                      "gutter": "24px",
+                      "container-max-width": "1440px",
+                      "margin-mobile": "16px"
+              },
+              "fontFamily": {
+                      "headline-lg": [
+                              "Satoshi"
+                      ],
+                      "label-caps": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "headline-xl": [
+                              "Satoshi"
+                      ],
+                      "display-lg": [
+                              "Satoshi"
+                      ],
+                      "data-mono": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "headline-lg": [
+                              "24px",
+                              {
+                                      "lineHeight": "1.3",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-caps": [
+                              "12px",
+                              {
+                                      "lineHeight": "1.0",
+                                      "letterSpacing": "0.08em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "1.5",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "1.6",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-xl": [
+                              "32px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "1.1",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "data-mono": [
+                              "14px",
+                              {
+                                      "lineHeight": "1.0",
+                                      "fontWeight": "500"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex">
+<!-- SideNavBar -->
+<nav class="hidden md:flex flex-col fixed left-0 top-0 h-full z-50 border-r border-outline-variant/30 bg-surface-container-low dark:bg-surface-container shadow-[0_12px_24px_-8px_rgba(64,59,54,0.08)] w-72">
+<div class="px-6 py-8 flex flex-col items-start gap-1 bg-surface-container-low dark:bg-surface-container shadow-[inset_1px_1px_2px_rgba(0,0,0,0.05)]">
+<span class="font-headline-lg text-headline-lg font-bold text-primary dark:text-primary-fixed-dim">KodaiRateIQ</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant">Revenue Intelligence</span>
+</div>
+<div class="flex-1 py-6 flex flex-col gap-2 overflow-y-auto">
+<a class="text-on-secondary-fixed-variant dark:text-on-secondary-fixed-variant font-body-md py-3 px-6 flex items-center gap-4 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-300 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                Dashboard
+            </a>
+<a class="text-on-secondary-fixed-variant dark:text-on-secondary-fixed-variant font-body-md py-3 px-6 flex items-center gap-4 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-300 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">payments</span>
+                Live Rates
+            </a>
+<a class="text-primary dark:text-primary-fixed-dim font-bold border-r-4 border-primary dark:border-primary-fixed-dim bg-surface-bright dark:bg-surface-container-highest shadow-sm py-3 px-6 flex items-center gap-4 active:scale-[0.98] transition-all duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+                AI Recommendations
+            </a>
+<a class="text-on-secondary-fixed-variant dark:text-on-secondary-fixed-variant font-body-md py-3 px-6 flex items-center gap-4 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-300 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">groups</span>
+                Competitors
+            </a>
+<a class="text-on-secondary-fixed-variant dark:text-on-secondary-fixed-variant font-body-md py-3 px-6 flex items-center gap-4 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-300 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">history</span>
+                Historical Analytics
+            </a>
+<a class="text-on-secondary-fixed-variant dark:text-on-secondary-fixed-variant font-body-md py-3 px-6 flex items-center gap-4 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-300 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">hotel</span>
+                Hotels
+            </a>
+<a class="text-on-secondary-fixed-variant dark:text-on-secondary-fixed-variant font-body-md py-3 px-6 flex items-center gap-4 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-300 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">lightbulb</span>
+                Insights
+            </a>
+<a class="text-on-secondary-fixed-variant dark:text-on-secondary-fixed-variant font-body-md py-3 px-6 flex items-center gap-4 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-300 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">settings</span>
+                Settings
+            </a>
+</div>
+<div class="mt-auto border-t border-outline-variant/30 py-4">
+<a class="text-on-secondary-fixed-variant dark:text-on-secondary-fixed-variant font-body-md py-3 px-6 flex items-center gap-4 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-300 active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">person</span>
+                Profile
+            </a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 md:ml-72 flex flex-col min-h-screen">
+<!-- TopAppBar (Mobile Only - representing the shell layout for responsive) -->
+<header class="md:hidden flex justify-between items-center w-full px-margin-mobile h-16 sticky top-0 z-40 bg-surface dark:bg-background shadow-[0_4px_12px_-4px_rgba(64,59,54,0.08)] bg-surface-container-low dark:bg-surface-container shadow-[inset_1px_1px_2px_rgba(0,0,0,0.05)]">
+<div class="font-headline-lg text-headline-lg font-bold text-primary dark:text-primary-fixed-dim">KodaiRateIQ</div>
+<div class="flex items-center gap-4 text-primary dark:text-primary-fixed-dim">
+<button class="hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 active:scale-95 transition-transform duration-150"><span class="material-symbols-outlined">sync</span></button>
+<button class="hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 active:scale-95 transition-transform duration-150"><span class="material-symbols-outlined">notifications</span></button>
+<button class="hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 active:scale-95 transition-transform duration-150"><span class="material-symbols-outlined">account_circle</span></button>
+</div>
+</header>
+<!-- Canvas -->
+<div class="flex-1 p-margin-mobile md:p-margin-desktop max-w-container-max-width mx-auto w-full flex flex-col gap-gutter">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-4">
+<div>
+<h1 class="font-display-lg text-display-lg text-on-background mb-2">HKI Pricing Strategy</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+                        AI Recommended MAP Price (Next 30 Days)
+                    </p>
+</div>
+<div class="flex gap-3">
+<button class="px-6 py-3 bg-surface-container border border-outline-variant rounded-lg font-label-caps text-label-caps text-on-surface shadow-[0_4px_12px_-4px_rgba(64,59,54,0.08)] hover:bg-surface-container-high transition-colors">Export Strategy</button>
+<button class="px-6 py-3 bg-primary text-on-primary rounded-lg font-label-caps text-label-caps shadow-[0_4px_12px_-4px_rgba(64,59,54,0.08)] border-t border-white/20 hover:bg-surface-tint transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">publish</span> Apply All
+                    </button>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+<!-- Main Recommendation (Spans 8 columns) -->
+<div class="col-span-1 lg:col-span-8 bg-surface-container-low rounded-xl shadow-[0_12px_24px_-8px_rgba(64,59,54,0.08)] p-6 md:p-8 flex flex-col justify-between border border-white/50 relative overflow-hidden">
+<div class="absolute top-0 right-0 w-64 h-64 bg-primary-container/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
+<div class="relative z-10 flex flex-col h-full">
+<div class="flex justify-between items-start mb-6">
+<div class="px-3 py-1 bg-primary-container text-on-primary-container rounded-full font-label-caps text-label-caps flex items-center gap-1 shadow-sm border border-primary-container/20">
+<span class="material-symbols-outlined text-[14px]">verified</span> Primary Recommendation
+                            </div>
+<span class="font-data-mono text-data-mono text-on-surface-variant">Update: 10 mins ago</span>
+</div>
+<div class="flex flex-col md:flex-row gap-8 items-end mb-8">
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-1">Target MAP Rate</p>
+<div class="font-display-lg text-display-lg text-on-background flex items-baseline gap-2">
+                                    $285 <span class="font-headline-lg text-headline-lg text-tertiary">↑ $15</span>
+</div>
+</div>
+<div class="hidden md:block w-px h-16 bg-outline-variant/50"></div>
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-1">Expected RevPAR Impact</p>
+<div class="font-headline-xl text-headline-xl text-primary-container">+8.4%</div>
+</div>
+</div>
+<div class="bg-surface rounded-lg p-5 shadow-[inset_1px_1px_2px_rgba(0,0,0,0.05)] border border-outline-variant/30 mt-auto">
+<h3 class="font-headline-lg text-headline-lg text-on-background mb-3 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container">psychology</span> Strategic Reasoning
+                            </h3>
+<ul class="space-y-3 font-body-md text-body-md text-on-surface-variant">
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-tertiary text-[20px] mt-0.5">trending_up</span>
+<span><strong>Tamara</strong> occupancy rising sharply (82%) for the upcoming weekend, allowing rate elasticity.</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-secondary text-[20px] mt-0.5">compress</span>
+<span>Competitor pressure index is currently moderate, suggesting a window for a targeted price increase before market reaction.</span>
+</li>
+</ul>
+<div class="mt-4 flex gap-3">
+<button class="px-4 py-2 bg-primary text-on-primary rounded font-label-caps text-label-caps shadow-sm border-t border-white/20 hover:bg-surface-tint transition-colors">Apply $285</button>
+<button class="px-4 py-2 bg-surface border border-outline-variant rounded font-label-caps text-label-caps text-on-surface shadow-sm hover:bg-surface-container transition-colors">Edit</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Scenario Planning (Spans 4 columns) -->
+<div class="col-span-1 lg:col-span-4 bg-surface-container-low rounded-xl shadow-[0_12px_24px_-8px_rgba(64,59,54,0.08)] p-6 border border-white/50 flex flex-col">
+<div class="pb-4 border-b border-outline-variant/30 mb-5">
+<h2 class="font-headline-lg text-headline-lg text-on-background">Scenario Planning</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Alternative rate strategies.</p>
+</div>
+<div class="flex flex-col gap-4 flex-1">
+<!-- Conservative -->
+<div class="bg-surface rounded-lg p-4 border border-outline-variant/30 hover:border-primary-container transition-colors cursor-pointer group shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+<div class="flex justify-between items-center mb-2">
+<span class="font-label-caps text-label-caps text-secondary">Conservative</span>
+<span class="font-data-mono text-data-mono text-on-background font-semibold">$270</span>
+</div>
+<p class="font-body-md text-[14px] text-on-surface-variant line-clamp-2">Maintain current volume; minimal risk of losing budget-sensitive groups.</p>
+<div class="mt-2 text-tertiary text-[14px] font-medium">+2.1% RevPAR</div>
+</div>
+<!-- Balanced (Active) -->
+<div class="bg-primary-container/10 rounded-lg p-4 border border-primary-container shadow-[0_2px_8px_rgba(198,167,105,0.15)] relative">
+<div class="absolute -left-1 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r"></div>
+<div class="flex justify-between items-center mb-2">
+<span class="font-label-caps text-label-caps text-primary-container flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">check_circle</span> Balanced</span>
+<span class="font-data-mono text-data-mono text-on-background font-semibold">$285</span>
+</div>
+<p class="font-body-md text-[14px] text-on-surface-variant">Optimal mix of rate capture and occupancy maintenance based on Tamara trends.</p>
+<div class="mt-2 text-primary-container text-[14px] font-medium">+8.4% RevPAR</div>
+</div>
+<!-- Aggressive -->
+<div class="bg-surface rounded-lg p-4 border border-outline-variant/30 hover:border-error-container transition-colors cursor-pointer group shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+<div class="flex justify-between items-center mb-2">
+<span class="font-label-caps text-label-caps text-error">Aggressive</span>
+<span class="font-data-mono text-data-mono text-on-background font-semibold">$310</span>
+</div>
+<p class="font-body-md text-[14px] text-on-surface-variant line-clamp-2">Maximize rate during high demand; high risk of occupancy drop if market softens.</p>
+<div class="mt-2 text-error text-[14px] font-medium">+11.2% RevPAR (High Variance)</div>
+</div>
+</div>
+</div>
+<!-- Indicators (Spans 4 columns) -->
+<div class="col-span-1 lg:col-span-4 bg-surface-container-low rounded-xl shadow-[0_12px_24px_-8px_rgba(64,59,54,0.08)] p-6 border border-white/50">
+<div class="pb-4 border-b border-outline-variant/30 mb-5">
+<h2 class="font-headline-lg text-headline-lg text-on-background">Market Indicators</h2>
+</div>
+<div class="space-y-6">
+<div>
+<div class="flex justify-between items-end mb-2">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Occupancy Prediction</span>
+<span class="font-data-mono text-data-mono text-on-background">84%</span>
+</div>
+<div class="h-2 bg-surface-container-high rounded-full overflow-hidden shadow-[inset_1px_1px_2px_rgba(0,0,0,0.1)]">
+<div class="h-full bg-tertiary rounded-full w-[84%]"></div>
+</div>
+<p class="text-[12px] text-on-surface-variant mt-1 text-right">High Confidence</p>
+</div>
+<div>
+<div class="flex justify-between items-end mb-2">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Competitor Pressure</span>
+<span class="font-data-mono text-data-mono text-on-background">Moderate</span>
+</div>
+<div class="h-2 bg-surface-container-high rounded-full overflow-hidden shadow-[inset_1px_1px_2px_rgba(0,0,0,0.1)]">
+<div class="h-full bg-primary-container rounded-full w-[45%]"></div>
+</div>
+<p class="text-[12px] text-on-surface-variant mt-1 text-right">Stable for next 72hrs</p>
+</div>
+</div>
+</div>
+<!-- Strategic Feed (Spans 8 columns) -->
+<div class="col-span-1 lg:col-span-8 bg-surface-container-low rounded-xl shadow-[0_12px_24px_-8px_rgba(64,59,54,0.08)] p-6 border border-white/50">
+<div class="pb-4 border-b border-outline-variant/30 mb-5 flex justify-between items-center">
+<h2 class="font-headline-lg text-headline-lg text-on-background">Strategic Timeline</h2>
+<span class="px-3 py-1 bg-surface border border-outline-variant rounded-full font-label-caps text-label-caps text-on-surface-variant">Market Triggers</span>
+</div>
+<div class="relative border-l-2 border-surface-container-high ml-3 space-y-6">
+<div class="relative pl-6">
+<div class="absolute -left-[9px] top-1 w-4 h-4 bg-primary-container rounded-full border-2 border-surface-container-low shadow-sm"></div>
+<p class="font-data-mono text-[12px] text-primary-container mb-1">Today, 09:45 AM</p>
+<h4 class="font-headline-lg text-[18px] text-on-background">Trigger: Competitor Rate Drop Detected</h4>
+<p class="font-body-md text-on-surface-variant mt-1">Taj Savoy dropped rates by 5% for the upcoming weekend. AI recommends holding $285 as our occupancy is secure.</p>
+</div>
+<div class="relative pl-6">
+<div class="absolute -left-[9px] top-1 w-4 h-4 bg-tertiary rounded-full border-2 border-surface-container-low shadow-sm"></div>
+<p class="font-data-mono text-[12px] text-tertiary mb-1">Yesterday, 14:20 PM</p>
+<h4 class="font-headline-lg text-[18px] text-on-background">Trigger: Surge in Group Bookings</h4>
+<p class="font-body-md text-on-surface-variant mt-1">Sudden intake of 12 rooms for corporate retreat. Baseline MAP recommendation shifted from $275 to $285.</p>
+</div>
+<div class="relative pl-6 opacity-60">
+<div class="absolute -left-[9px] top-1 w-4 h-4 bg-outline-variant rounded-full border-2 border-surface-container-low"></div>
+<p class="font-data-mono text-[12px] text-on-surface-variant mb-1">Oct 12, 08:00 AM</p>
+<h4 class="font-headline-lg text-[18px] text-on-background">Action: Rate Plan Published</h4>
+<p class="font-body-md text-on-surface-variant mt-1">Previous MAP rate of $275 successfully pushed to all channels.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

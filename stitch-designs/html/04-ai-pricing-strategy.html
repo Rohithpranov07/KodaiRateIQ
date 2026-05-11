@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Lumina Elite - AI Recommendations</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@200;300;400;500;600&amp;family=Inter:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "inverse-primary": "#006c49",
+                      "surface-tint": "#4edea3",
+                      "background": "#11131c",
+                      "on-background": "#e1e1ef",
+                      "surface-container-highest": "#32343f",
+                      "tertiary": "#adc6ff",
+                      "outline": "#86948a",
+                      "tertiary-container": "#71a1ff",
+                      "on-surface-variant": "#bbcabf",
+                      "on-error": "#690005",
+                      "on-tertiary-fixed": "#001a42",
+                      "on-primary-fixed": "#002113",
+                      "on-secondary-container": "#342800",
+                      "error-container": "#93000a",
+                      "primary-container": "#10b981",
+                      "secondary-fixed": "#ffe088",
+                      "surface": "#11131c",
+                      "on-secondary": "#3c2f00",
+                      "surface-bright": "#373943",
+                      "surface-dim": "#11131c",
+                      "on-primary-container": "#00422b",
+                      "surface-variant": "#32343f",
+                      "outline-variant": "#3c4a42",
+                      "secondary": "#e9c349",
+                      "on-tertiary-container": "#00367a",
+                      "on-secondary-fixed-variant": "#574500",
+                      "tertiary-fixed-dim": "#adc6ff",
+                      "on-secondary-fixed": "#241a00",
+                      "surface-container-lowest": "#0c0e17",
+                      "on-primary-fixed-variant": "#005236",
+                      "on-error-container": "#ffdad6",
+                      "surface-container-low": "#191b25",
+                      "inverse-on-surface": "#2e303a",
+                      "on-tertiary-fixed-variant": "#004395",
+                      "surface-container": "#1d1f29",
+                      "secondary-fixed-dim": "#e9c349",
+                      "secondary-container": "#af8d11",
+                      "on-tertiary": "#002e6a",
+                      "tertiary-fixed": "#d8e2ff",
+                      "inverse-surface": "#e1e1ef",
+                      "primary": "#4edea3",
+                      "error": "#ffb4ab",
+                      "primary-fixed": "#6ffbbe",
+                      "primary-fixed-dim": "#4edea3",
+                      "on-surface": "#e1e1ef",
+                      "surface-container-high": "#282933",
+                      "on-primary": "#003824"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "phi-md": "1rem",
+                      "phi-sm": "0.618rem",
+                      "margin": "2.5rem",
+                      "phi-lg": "1.618rem",
+                      "phi-xl": "2.618rem",
+                      "phi-xxl": "4.236rem",
+                      "gutter": "1.5rem"
+              },
+              "fontFamily": {
+                      "data-mono": ["Geist"],
+                      "headline-lg": ["Geist"],
+                      "body-md": ["Inter"],
+                      "metric-xl": ["Geist"],
+                      "display-hero": ["Geist"],
+                      "headline-lg-mobile": ["Geist"],
+                      "label-caps": ["Geist"]
+              },
+              "fontSize": {
+                      "data-mono": ["13px", {"lineHeight": "18px", "letterSpacing": "0em", "fontWeight": "400"}],
+                      "headline-lg": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "300"}],
+                      "body-md": ["16px", {"lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "400"}],
+                      "metric-xl": ["32px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "500"}],
+                      "display-hero": ["72px", {"lineHeight": "80px", "letterSpacing": "-0.04em", "fontWeight": "200"}],
+                      "headline-lg-mobile": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "300"}],
+                      "label-caps": ["11px", {"lineHeight": "16px", "letterSpacing": "0.1em", "fontWeight": "600"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(25, 27, 37, 0.4); /* surface-container-low with opacity */
+            backdrop-filter: blur(32px);
+            -webkit-backdrop-filter: blur(32px);
+            border: 1px solid rgba(60, 74, 66, 0.2); /* outline-variant */
+        }
+        .glow-accent-secondary {
+            box-shadow: inset 0 0 40px -20px rgba(233, 195, 73, 0.15), 0 0 20px -10px rgba(233, 195, 73, 0.2);
+            border: 1px solid rgba(233, 195, 73, 0.3);
+        }
+        .specular-highlight {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md antialiased overflow-x-hidden">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-margin py-phi-sm bg-background/60 backdrop-blur-3xl border-b border-outline-variant/10 shadow-sm backdrop-saturate-150 pl-[320px]">
+<div class="flex items-center gap-phi-md">
+<span class="font-headline-lg text-primary tracking-tight font-light">LUMINA</span>
+<div class="hidden px-4 py-1.5 rounded-full bg-surface-variant/30 border border-outline-variant/20 flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-[18px]">search</span>
+<span class="font-data-mono text-data-mono text-on-surface-variant">Global Intelligence...</span>
+</div>
+</div>
+<div class="flex items-center gap-phi-lg">
+<div class="flex items-center gap-phi-sm">
+<button class="p-2 rounded-full hover:bg-surface-variant/30 transition-colors duration-300 text-on-surface-variant group">
+<span class="material-symbols-outlined group-hover:text-surface-tint transition-colors duration-300 scale-95 active:scale-90">monitoring</span>
+</button>
+<button class="p-2 rounded-full hover:bg-surface-variant/30 transition-colors duration-300 text-on-surface-variant group">
+<span class="material-symbols-outlined group-hover:text-surface-tint transition-colors duration-300 scale-95 active:scale-90">psychology</span>
+</button>
+</div>
+<div class="w-10 h-10 rounded-full bg-surface-container-highest border border-outline-variant/30 overflow-hidden relative shadow-inner">
+<img alt="Executive Portrait" class="w-full h-full object-cover" data-alt="A professional headshot of a mature executive in a tailored dark suit, shot against a subtle studio backdrop with cinematic rim lighting. The lighting conveys authority, precision, and elite corporate status. The color grading is slightly cool and muted, fitting perfectly within a modern dark-mode digital interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5E3DvswIP9rMOQ0z8eKsuYY0gbV4tOlFBQIhOicubZE4gl-WS-mfDn99DwTnhLnOzKeRKw_xLHUISx6UZmc08NslIZHJcYcHSqvQGNSpMWJhA7EzH1ibbx6AsNSXsdZUhKnfD-EucAGG_AUbB2FM-twn0R139-bJmw5FHplnAJgLM5tZPPv7Tq4-eFTMXAie_XtwuPA3mZlI0GsLLd2dnDQoGYSOvjC-QvYCfc47JSKdHNFBtrheizkVA-2uGLJHiswFjFH6F3aE"/>
+</div>
+</div>
+</header>
+<!-- SideNavBar -->
+<nav class="fixed left-0 top-0 h-full w-[280px] flex flex-col py-margin gap-phi-lg bg-surface-container-lowest/80 backdrop-blur-2xl border-r border-outline-variant/10 shadow-2xl shadow-background/50 z-40">
+<div class="px-margin mb-phi-md">
+<div class="w-12 h-12 rounded-xl bg-surface-variant/50 border border-outline-variant/30 mb-phi-sm flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-[24px]">public</span>
+</div>
+<h2 class="font-headline-lg-mobile text-primary font-light">Lumina Elite</h2>
+<p class="font-label-caps text-label-caps text-on-surface-variant mt-1">Hospitality Intelligence</p>
+</div>
+<div class="flex flex-col gap-2 px-phi-sm overflow-y-auto flex-grow">
+<!-- Dashboard -->
+<a class="group flex items-center gap-phi-md px-phi-md py-3 rounded-lg text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-300 text-[20px]">dashboard</span>
+<span class="font-label-caps text-label-caps tracking-widest">Dashboard</span>
+</a>
+<!-- Live Rates -->
+<a class="group flex items-center gap-phi-md px-phi-md py-3 rounded-lg text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-300 text-[20px]">trending_up</span>
+<span class="font-label-caps text-label-caps tracking-widest">Live Rates</span>
+</a>
+<!-- AI Recommendations (ACTIVE) -->
+<a class="group flex items-center gap-phi-md px-phi-md py-3 rounded-lg text-primary bg-primary/5 border-r-2 border-primary shadow-[inset_-10px_0_20px_-10px_rgba(78,222,163,0.2)]" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-300 text-[20px]" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+<span class="font-label-caps text-label-caps tracking-widest">AI Recommendations</span>
+</a>
+<!-- Competitors -->
+<a class="group flex items-center gap-phi-md px-phi-md py-3 rounded-lg text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-300 text-[20px]">groups</span>
+<span class="font-label-caps text-label-caps tracking-widest">Competitors</span>
+</a>
+<!-- Analytics -->
+<a class="group flex items-center gap-phi-md px-phi-md py-3 rounded-lg text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-300 text-[20px]">analytics</span>
+<span class="font-label-caps text-label-caps tracking-widest">Analytics</span>
+</a>
+<!-- Hotels -->
+<a class="group flex items-center gap-phi-md px-phi-md py-3 rounded-lg text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-300 text-[20px]">apartment</span>
+<span class="font-label-caps text-label-caps tracking-widest">Hotels</span>
+</a>
+<!-- Insights -->
+<a class="group flex items-center gap-phi-md px-phi-md py-3 rounded-lg text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-300 text-[20px]">lightbulb</span>
+<span class="font-label-caps text-label-caps tracking-widest">Insights</span>
+</a>
+</div>
+<div class="px-phi-sm mt-auto">
+<!-- Settings -->
+<a class="group flex items-center gap-phi-md px-phi-md py-3 rounded-lg text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-300 text-[20px]">settings</span>
+<span class="font-label-caps text-label-caps tracking-widest">Settings</span>
+</a>
+</div>
+</nav>
+<!-- Main Canvas -->
+<main class="ml-[280px] pt-[100px] p-margin min-h-screen">
+<!-- Header -->
+<div class="flex items-end justify-between mb-phi-xl">
+<div>
+<div class="flex items-center gap-2 mb-2">
+<span class="font-label-caps text-label-caps text-secondary bg-secondary/10 px-2 py-1 rounded border border-secondary/20">HOTEL KODAI INTERNATIONAL</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant">STRATEGIC PRICING INTELLIGENCE</span>
+</div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface">MAP Rate Optimization</h1>
+</div>
+<div class="flex gap-4">
+<button class="px-6 py-2 rounded-lg border border-outline-variant/50 text-on-surface font-label-caps text-label-caps hover:bg-surface-variant/30 transition-colors">EXPORT DATA</button>
+<button class="px-6 py-2 rounded-lg bg-primary/20 border border-primary/50 text-primary font-label-caps text-label-caps hover:bg-primary/30 transition-colors backdrop-blur-md">APPLY STRATEGY</button>
+</div>
+</div>
+<!-- Bento Grid -->
+<div class="grid grid-cols-12 gap-gutter">
+<!-- Hero Panel: AI Recommendation -->
+<div class="col-span-12 lg:col-span-8 glass-panel rounded-xl p-margin relative overflow-hidden flex flex-col justify-between min-h-[400px] glow-accent-secondary">
+<div class="specular-highlight"></div>
+<div class="absolute -right-20 -top-20 w-96 h-96 bg-secondary/5 rounded-full blur-[100px] pointer-events-none"></div>
+<div class="flex justify-between items-start z-10">
+<div>
+<div class="flex items-center gap-2 mb-4">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+<h3 class="font-label-caps text-label-caps text-secondary tracking-widest">OPTIMAL MAP RATE RECOMMENDATION</h3>
+</div>
+<div class="flex items-baseline gap-4 mt-8">
+<span class="font-data-mono text-secondary text-2xl">INR</span>
+<span class="font-display-hero text-display-hero text-on-surface tracking-tighter">14,250</span>
+<span class="font-body-md text-body-md text-on-surface-variant">/ night</span>
+</div>
+<div class="mt-6 flex gap-6">
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-1">PROJECTED REVPAR</p>
+<p class="font-metric-xl text-metric-xl text-primary font-data-mono">₹9,840 <span class="text-sm text-primary/70">↑ 12%</span></p>
+</div>
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-1">DEMAND SURGE</p>
+<p class="font-metric-xl text-metric-xl text-on-surface font-data-mono">High <span class="text-sm text-on-surface-variant">Next 14 Days</span></p>
+</div>
+</div>
+</div>
+<!-- Confidence Meter -->
+<div class="relative w-48 h-48 flex items-center justify-center">
+<svg class="w-full h-full transform -rotate-90" viewbox="0 0 100 100">
+<!-- Background track -->
+<circle cx="50" cy="50" fill="none" r="40" stroke="rgba(255,255,255,0.05)" stroke-dasharray="188.5 251.2" stroke-width="8"></circle>
+<!-- Value track -->
+<circle class="text-secondary" cx="50" cy="50" fill="none" r="40" stroke="currentColor" stroke-dasharray="175 251.2" stroke-linecap="round" stroke-width="8"></circle>
+</svg>
+<div class="absolute flex flex-col items-center justify-center">
+<span class="font-metric-xl text-metric-xl text-on-surface font-data-mono">92%</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant">CONFIDENCE</span>
+</div>
+</div>
+</div>
+<div class="mt-8 z-10">
+<p class="font-body-md text-body-md text-on-surface-variant max-w-2xl">AI analysis indicates a strong compression in the Kodai market due to upcoming regional holidays. Comp-set pricing is currently inelastic. Recommended to implement premium positioning immediately to capture unconstrained demand.</p>
+</div>
+</div>
+<!-- Strategy Selection -->
+<div class="col-span-12 lg:col-span-4 flex flex-col gap-phi-md">
+<!-- Premium (Recommended) -->
+<div class="glass-panel rounded-xl p-phi-lg border-secondary/40 bg-secondary/5 relative group cursor-pointer hover:bg-secondary/10 transition-colors">
+<div class="absolute top-4 right-4">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<h4 class="font-label-caps text-label-caps text-secondary mb-2 tracking-widest">PREMIUM POSITIONING</h4>
+<p class="font-metric-xl text-metric-xl text-on-surface font-data-mono mb-1">₹14,250</p>
+<p class="font-data-mono text-data-mono text-on-surface-variant">Maximized Yield / 78% Occ.</p>
+</div>
+<!-- Aggressive -->
+<div class="glass-panel rounded-xl p-phi-lg group cursor-pointer hover:bg-surface-variant/20 transition-colors border-outline-variant/20">
+<h4 class="font-label-caps text-label-caps text-on-surface mb-2 tracking-widest">AGGRESSIVE GROWTH</h4>
+<p class="font-metric-xl text-metric-xl text-on-surface font-data-mono mb-1">₹12,800</p>
+<p class="font-data-mono text-data-mono text-on-surface-variant">Volume Focus / 92% Occ.</p>
+</div>
+<!-- Conservative -->
+<div class="glass-panel rounded-xl p-phi-lg group cursor-pointer hover:bg-surface-variant/20 transition-colors border-outline-variant/20">
+<h4 class="font-label-caps text-label-caps text-on-surface mb-2 tracking-widest">CONSERVATIVE STABILITY</h4>
+<p class="font-metric-xl text-metric-xl text-on-surface font-data-mono mb-1">₹13,500</p>
+<p class="font-data-mono text-data-mono text-on-surface-variant">Balanced / 85% Occ.</p>
+</div>
+</div>
+<!-- Occupancy vs Revenue Visualization -->
+<div class="col-span-12 lg:col-span-7 glass-panel rounded-xl p-margin relative">
+<div class="specular-highlight"></div>
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-label-caps text-label-caps text-on-surface tracking-widest">OCCUPANCY PREDICTION VS REVENUE IMPACT</h3>
+<div class="flex gap-4">
+<div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-primary"></span><span class="font-data-mono text-data-mono text-on-surface-variant">Revenue (Est)</span></div>
+<div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full border border-secondary"></span><span class="font-data-mono text-data-mono text-on-surface-variant">Occupancy %</span></div>
+</div>
+</div>
+<!-- Abstract Chart Representation -->
+<div class="h-64 w-full flex items-end gap-2 relative">
+<!-- Grid lines -->
+<div class="absolute inset-0 flex flex-col justify-between pointer-events-none">
+<div class="w-full border-t border-outline-variant/10"></div>
+<div class="w-full border-t border-outline-variant/10"></div>
+<div class="w-full border-t border-outline-variant/10"></div>
+<div class="w-full border-t border-outline-variant/10"></div>
+</div>
+<!-- Bars -->
+<div class="flex-1 bg-primary/20 rounded-t-sm h-[40%] relative group hover:bg-primary/40 transition-colors border-t border-primary/50"></div>
+<div class="flex-1 bg-primary/20 rounded-t-sm h-[50%] relative group hover:bg-primary/40 transition-colors border-t border-primary/50"></div>
+<div class="flex-1 bg-primary/20 rounded-t-sm h-[65%] relative group hover:bg-primary/40 transition-colors border-t border-primary/50"></div>
+<div class="flex-1 bg-secondary/30 rounded-t-sm h-[85%] relative group hover:bg-secondary/50 transition-colors border-t border-secondary glow-accent-secondary"></div>
+<div class="flex-1 bg-primary/20 rounded-t-sm h-[70%] relative group hover:bg-primary/40 transition-colors border-t border-primary/50"></div>
+<div class="flex-1 bg-primary/20 rounded-t-sm h-[60%] relative group hover:bg-primary/40 transition-colors border-t border-primary/50"></div>
+<div class="flex-1 bg-primary/20 rounded-t-sm h-[45%] relative group hover:bg-primary/40 transition-colors border-t border-primary/50"></div>
+<!-- Line overlay (abstract SVG) -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none" preserveaspectratio="none" viewbox="0 0 100 100">
+<path class="text-secondary" d="M 5 60 L 20 50 L 35 40 L 50 20 L 65 35 L 80 45 L 95 65" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+<circle class="text-secondary" cx="50" cy="20" fill="currentColor" r="1.5"></circle>
+</svg>
+</div>
+<div class="flex justify-between mt-4 font-data-mono text-data-mono text-on-surface-variant">
+<span>Mon</span><span>Tue</span><span>Wed</span><span class="text-secondary">Thu (Target)</span><span>Fri</span><span>Sat</span><span>Sun</span>
+</div>
+</div>
+<!-- Competitor Pressure Radar -->
+<div class="col-span-12 lg:col-span-5 glass-panel rounded-xl p-margin relative flex flex-col items-center justify-center">
+<div class="specular-highlight"></div>
+<h3 class="font-label-caps text-label-caps text-on-surface tracking-widest absolute top-margin left-margin">COMPETITOR PRESSURE ANALYSIS</h3>
+<div class="relative w-64 h-64 mt-8">
+<!-- Abstract Radar Chart -->
+<svg class="w-full h-full" viewbox="0 0 100 100">
+<!-- Grid -->
+<polygon fill="none" points="50,10 85,30 85,70 50,90 15,70 15,30" stroke="rgba(255,255,255,0.05)" stroke-width="1"></polygon>
+<polygon fill="none" points="50,30 67.5,40 67.5,60 50,70 32.5,60 32.5,40" stroke="rgba(255,255,255,0.05)" stroke-width="1"></polygon>
+<line stroke="rgba(255,255,255,0.05)" stroke-width="1" x1="50" x2="50" y1="50" y2="10"></line>
+<line stroke="rgba(255,255,255,0.05)" stroke-width="1" x1="50" x2="85" y1="50" y2="30"></line>
+<line stroke="rgba(255,255,255,0.05)" stroke-width="1" x1="50" x2="85" y1="50" y2="70"></line>
+<line stroke="rgba(255,255,255,0.05)" stroke-width="1" x1="50" x2="50" y1="50" y2="90"></line>
+<line stroke="rgba(255,255,255,0.05)" stroke-width="1" x1="50" x2="15" y1="50" y2="70"></line>
+<line stroke="rgba(255,255,255,0.05)" stroke-width="1" x1="50" x2="15" y1="50" y2="30"></line>
+<!-- Comp Set Area -->
+<polygon fill="rgba(255,255,255,0.1)" points="50,40 70,35 60,65 50,80 25,60 30,35" stroke="rgba(255,255,255,0.3)" stroke-width="1"></polygon>
+<!-- Lumina Target Area -->
+<polygon class="text-primary" fill="rgba(78, 222, 163, 0.15)" points="50,15 80,40 75,75 50,60 20,65 20,25" stroke="currentColor" stroke-width="1.5"></polygon>
+</svg>
+<!-- Labels -->
+<div class="absolute -top-4 left-1/2 -translate-x-1/2 font-data-mono text-data-mono text-on-surface-variant">Rate</div>
+<div class="absolute top-1/4 -right-8 font-data-mono text-data-mono text-on-surface-variant">Amenities</div>
+<div class="absolute bottom-1/4 -right-4 font-data-mono text-data-mono text-on-surface-variant">Location</div>
+<div class="absolute -bottom-4 left-1/2 -translate-x-1/2 font-data-mono text-data-mono text-on-surface-variant">Brand</div>
+<div class="absolute bottom-1/4 -left-8 font-data-mono text-data-mono text-on-surface-variant">Reviews</div>
+<div class="absolute top-1/4 -left-8 font-data-mono text-data-mono text-on-surface-variant">Inventory</div>
+</div>
+<div class="mt-8 flex gap-4">
+<div class="flex items-center gap-2"><span class="w-3 h-3 bg-primary/30 border border-primary rounded-sm"></span><span class="font-data-mono text-data-mono text-on-surface-variant">Kodai Int.</span></div>
+<div class="flex items-center gap-2"><span class="w-3 h-3 bg-white/10 border border-white/30 rounded-sm"></span><span class="font-data-mono text-data-mono text-on-surface-variant">Comp Set Avg</span></div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

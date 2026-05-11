@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Login - KodaiRateIQ</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Satoshi:wght@600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-tint": "#735b25",
+                        "surface-container-low": "#eef4ff",
+                        "on-secondary-fixed": "#1f1b17",
+                        "error": "#ba1a1a",
+                        "on-background": "#111c29",
+                        "on-tertiary-fixed-variant": "#0e5138",
+                        "surface": "#f8f9ff",
+                        "tertiary-fixed": "#b1f0ce",
+                        "secondary-fixed-dim": "#cec5be",
+                        "surface-variant": "#d8e3f5",
+                        "on-error": "#ffffff",
+                        "primary-container": "#c6a769",
+                        "on-primary-fixed": "#261900",
+                        "inverse-surface": "#26313f",
+                        "primary": "#735b25",
+                        "primary-fixed-dim": "#e3c282",
+                        "surface-bright": "#f8f9ff",
+                        "on-primary-container": "#513c07",
+                        "on-tertiary": "#ffffff",
+                        "inverse-primary": "#e3c282",
+                        "on-tertiary-container": "#014931",
+                        "on-secondary-container": "#68625c",
+                        "on-tertiary-fixed": "#002114",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary": "#2c694e",
+                        "error-container": "#ffdad6",
+                        "secondary-container": "#e7ded7",
+                        "surface-container": "#e5efff",
+                        "tertiary-fixed-dim": "#95d4b3",
+                        "on-surface": "#111c29",
+                        "surface-container-highest": "#d8e3f5",
+                        "on-secondary": "#ffffff",
+                        "background": "#f8f9ff",
+                        "tertiary-container": "#7ab898",
+                        "on-secondary-fixed-variant": "#4b4641",
+                        "surface-container-high": "#dee9fb",
+                        "outline-variant": "#d0c5b5",
+                        "on-primary-fixed-variant": "#5a430e",
+                        "on-surface-variant": "#4d463a",
+                        "secondary": "#635d58",
+                        "on-primary": "#ffffff",
+                        "primary-fixed": "#ffdea0",
+                        "surface-dim": "#d0dbec",
+                        "on-error-container": "#93000a",
+                        "outline": "#7f7668",
+                        "secondary-fixed": "#eae1da",
+                        "inverse-on-surface": "#e9f1ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-desktop": "40px",
+                        "unit": "8px",
+                        "gutter": "24px",
+                        "container-max-width": "1440px",
+                        "margin-mobile": "16px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Satoshi"],
+                        "label-caps": ["Inter"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-xl": ["Satoshi"],
+                        "display-lg": ["Satoshi"],
+                        "data-mono": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["24px", { "lineHeight": "1.3", "fontWeight": "600" }],
+                        "label-caps": ["12px", { "lineHeight": "1.0", "letterSpacing": "0.08em", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "headline-xl": ["32px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "data-mono": ["14px", { "lineHeight": "1.0", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex">
+<!-- Left Panel: Image Background -->
+<div class="hidden lg:block lg:w-1/2 relative overflow-hidden bg-surface-variant">
+<div class="absolute inset-0 bg-cover bg-center" data-alt="A breathtaking, high-resolution landscape photograph of the Kodaikanal mountains captured during the golden hour of early morning. The scene features rolling, majestic hills shrouded in a delicate morning mist, bathed in a sophisticated, luxurious warm golden light. A subtle #C6A769 gold ambient overlay unifies the image, evoking a sense of calm, precision, and private-banking exclusivity appropriate for a premium revenue intelligence platform. The overall aesthetic is bright, serene, and modern." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAaE7cdFovfeXM-eMCSZKur_Gwweor0R4RkNG1A-OMmGxDj2Rln-vr-1xugT45h5ZzryWKiXR6wsk5wkivqVsaCPZSN75_OsDY58MwV1Grd9blT6bae40pEK5JbcBkKaH_Uwgbb8WkKBswf2dkOv8f-IevsJBql8JoxvZ_J-mLg85Uem7IsQ2SrzwCerkM7q43FmAfJU1wFH9v5dbCqlueUYTne5ifG9H9SG8whjkMuK6DPg8zt0bYp5kdG_kMbxFkSUgK0_0KqBUY');"></div>
+<!-- Gold Ambient Overlay -->
+<div class="absolute inset-0 bg-primary-container/30 mix-blend-multiply"></div>
+<div class="absolute inset-0 bg-gradient-to-r from-transparent to-background lg:to-surface"></div>
+</div>
+<!-- Right Panel: Login Canvas -->
+<div class="w-full lg:w-1/2 flex flex-col justify-between px-margin-mobile md:px-margin-desktop py-12 bg-surface">
+<!-- Empty top spacer for centering -->
+<div></div>
+<!-- Login Card Panel -->
+<div class="w-full max-w-md mx-auto">
+<!-- Minimal Logo -->
+<div class="flex items-center gap-3 mb-10">
+<span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings: 'FILL' 1;">analytics</span>
+<span class="font-headline-lg text-headline-lg text-on-surface tracking-tight">KodaiRateIQ</span>
+</div>
+<!-- Claymorphic Panel -->
+<div class="bg-surface-container-lowest rounded-xl shadow-[0_12px_24px_-8px_rgba(64,59,54,0.08)] p-8 sm:p-10 relative">
+<!-- Subtle etched line for top edge -->
+<div class="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-surface-container to-transparent"></div>
+<div class="mb-8">
+<h1 class="font-headline-xl text-headline-xl text-on-surface mb-2">Executive Access</h1>
+<p class="font-body-md text-body-md text-on-surface-variant">Authenticate to access real-time revenue intelligence.</p>
+</div>
+<form>
+<!-- Molded Input: Email -->
+<div class="mb-6">
+<label class="block font-label-caps text-label-caps text-on-surface-variant mb-2 uppercase">Corporate Email</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">mail</span>
+<input class="w-full bg-secondary-container shadow-[inset_1px_1px_2px_rgba(0,0,0,0.05)] border border-transparent focus:border-primary focus:ring-0 outline-none pl-12 pr-4 py-3 rounded-lg font-body-md text-body-md text-on-surface transition-colors" placeholder="director@hotelgroup.com" type="email"/>
+</div>
+</div>
+<!-- Molded Input: Password -->
+<div class="mb-6">
+<label class="block font-label-caps text-label-caps text-on-surface-variant mb-2 uppercase">Passphrase</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">lock</span>
+<input class="w-full bg-secondary-container shadow-[inset_1px_1px_2px_rgba(0,0,0,0.05)] border border-transparent focus:border-primary focus:ring-0 outline-none pl-12 pr-4 py-3 rounded-lg font-body-md text-body-md text-on-surface transition-colors" placeholder="••••••••••••" type="password"/>
+</div>
+</div>
+<!-- Options -->
+<div class="flex items-center justify-between mb-8">
+<label class="flex items-center gap-2 cursor-pointer group">
+<input class="w-4 h-4 rounded border-outline text-primary bg-secondary-container focus:ring-primary focus:ring-offset-surface-container-lowest" type="checkbox"/>
+<span class="font-body-md text-body-md text-on-surface-variant group-hover:text-on-surface transition-colors">Remember device</span>
+</label>
+<a class="font-label-caps text-label-caps text-primary hover:text-primary-fixed-dim transition-colors uppercase" href="#">Recover Access</a>
+</div>
+<!-- Primary Action Button -->
+<button class="w-full flex items-center justify-center gap-2 bg-primary text-on-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_4px_6px_-1px_rgba(115,91,37,0.2)] hover:bg-surface-tint active:scale-[0.98] transition-all duration-200 py-3.5 rounded-lg font-label-caps text-label-caps uppercase tracking-widest" type="submit">
+                        Sign In Securely
+                        <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</form>
+</div>
+</div>
+<!-- Bottom System Status -->
+<div class="w-full max-w-md mx-auto mt-8 flex items-center justify-between font-data-mono text-data-mono text-on-surface-variant pt-6 border-t border-surface-container-high">
+<div class="flex items-center gap-2">
+<div class="relative flex h-2.5 w-2.5">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-tertiary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-tertiary"></span>
+</div>
+<span>Data Engine Online</span>
+</div>
+<div class="flex items-center gap-1.5 opacity-80">
+<span class="material-symbols-outlined text-[14px]">sync</span>
+<span>Last Sync: 4m ago</span>
+</div>
+</div>
+</div>
+</body></html>

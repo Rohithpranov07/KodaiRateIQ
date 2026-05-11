@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Competitor Analytics</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@200;300;400;500;600&amp;family=Inter:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "inverse-primary": "#006c49",
+                        "surface-tint": "#4edea3",
+                        "background": "#11131c",
+                        "on-background": "#e1e1ef",
+                        "surface-container-highest": "#32343f",
+                        "tertiary": "#adc6ff",
+                        "outline": "#86948a",
+                        "tertiary-container": "#71a1ff",
+                        "on-surface-variant": "#bbcabf",
+                        "on-error": "#690005",
+                        "on-tertiary-fixed": "#001a42",
+                        "on-primary-fixed": "#002113",
+                        "on-secondary-container": "#342800",
+                        "error-container": "#93000a",
+                        "primary-container": "#10b981",
+                        "secondary-fixed": "#ffe088",
+                        "surface": "#11131c",
+                        "on-secondary": "#3c2f00",
+                        "surface-bright": "#373943",
+                        "surface-dim": "#11131c",
+                        "on-primary-container": "#00422b",
+                        "surface-variant": "#32343f",
+                        "outline-variant": "#3c4a42",
+                        "secondary": "#e9c349",
+                        "on-tertiary-container": "#00367a",
+                        "on-secondary-fixed-variant": "#574500",
+                        "tertiary-fixed-dim": "#adc6ff",
+                        "on-secondary-fixed": "#241a00",
+                        "surface-container-lowest": "#0c0e17",
+                        "on-primary-fixed-variant": "#005236",
+                        "on-error-container": "#ffdad6",
+                        "surface-container-low": "#191b25",
+                        "inverse-on-surface": "#2e303a",
+                        "on-tertiary-fixed-variant": "#004395",
+                        "surface-container": "#1d1f29",
+                        "secondary-fixed-dim": "#e9c349",
+                        "secondary-container": "#af8d11",
+                        "on-tertiary": "#002e6a",
+                        "tertiary-fixed": "#d8e2ff",
+                        "inverse-surface": "#e1e1ef",
+                        "primary": "#4edea3",
+                        "error": "#ffb4ab",
+                        "primary-fixed": "#6ffbbe",
+                        "primary-fixed-dim": "#4edea3",
+                        "on-surface": "#e1e1ef",
+                        "surface-container-high": "#282933",
+                        "on-primary": "#003824"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    spacing: {
+                        "phi-md": "1rem",
+                        "phi-sm": "0.618rem",
+                        "margin": "2.5rem",
+                        "phi-lg": "1.618rem",
+                        "phi-xl": "2.618rem",
+                        "phi-xxl": "4.236rem",
+                        "gutter": "1.5rem"
+                    },
+                    fontFamily: {
+                        "data-mono": ["Geist"],
+                        "headline-lg": ["Geist"],
+                        "body-md": ["Inter"],
+                        "metric-xl": ["Geist"],
+                        "display-hero": ["Geist"],
+                        "headline-lg-mobile": ["Geist"],
+                        "label-caps": ["Geist"]
+                    },
+                    fontSize: {
+                        "data-mono": ["13px", { lineHeight: "18px", letterSpacing: "0em", fontWeight: "400" }],
+                        "headline-lg": ["40px", { lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "300" }],
+                        "body-md": ["16px", { lineHeight: "24px", letterSpacing: "0em", fontWeight: "400" }],
+                        "metric-xl": ["32px", { lineHeight: "32px", letterSpacing: "-0.01em", fontWeight: "500" }],
+                        "display-hero": ["72px", { lineHeight: "80px", letterSpacing: "-0.04em", fontWeight: "200" }],
+                        "headline-lg-mobile": ["32px", { lineHeight: "40px", letterSpacing: "-0.02em", fontWeight: "300" }],
+                        "label-caps": ["11px", { lineHeight: "16px", letterSpacing: "0.1em", fontWeight: "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(25, 27, 37, 0.4);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(134, 148, 138, 0.15);
+            box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+        }
+        .text-gradient {
+            background: linear-gradient(135deg, #4edea3 0%, #006c49 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(134, 148, 138, 0.2);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(134, 148, 138, 0.4);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex overflow-hidden font-body-md text-body-md selection:bg-primary-container selection:text-on-primary-container">
+<!-- SideNavBar -->
+<nav class="hidden md:flex flex-col bg-surface-container-lowest/80 backdrop-blur-2xl border-r border-outline-variant/10 shadow-2xl shadow-background/50 fixed left-0 top-0 h-full w-[280px] py-margin gap-phi-lg z-50">
+<div class="px-margin flex flex-col gap-2">
+<div class="font-headline-lg-mobile text-primary font-light flex items-center gap-3">
+<span class="material-symbols-outlined text-4xl" style="font-variation-settings: 'FILL' 1;">view_in_ar</span>
+                Lumina Elite
+            </div>
+<div class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest">Hospitality Intelligence</div>
+</div>
+<div class="flex-1 overflow-y-auto px-4 space-y-2 mt-8">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500 group" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-300">dashboard</span>
+<span class="font-label-caps text-label-caps group-hover:translate-x-1 duration-300">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500 group" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-300">trending_up</span>
+<span class="font-label-caps text-label-caps group-hover:translate-x-1 duration-300">Live Rates</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500 group" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-300">auto_awesome</span>
+<span class="font-label-caps text-label-caps group-hover:translate-x-1 duration-300">AI Recommendations</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary bg-primary/5 border-r-2 border-primary shadow-[inset_-10px_0_20px_-10px_rgba(78,222,163,0.2)] group" href="#">
+<span class="material-symbols-outlined">groups</span>
+<span class="font-label-caps text-label-caps">Competitors</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500 group" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-300">analytics</span>
+<span class="font-label-caps text-label-caps group-hover:translate-x-1 duration-300">Analytics</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500 group" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-300">apartment</span>
+<span class="font-label-caps text-label-caps group-hover:translate-x-1 duration-300">Hotels</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500 group" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-300">lightbulb</span>
+<span class="font-label-caps text-label-caps group-hover:translate-x-1 duration-300">Insights</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant opacity-70 hover:bg-surface-variant/30 hover:opacity-100 transition-all duration-500 group" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-300">settings</span>
+<span class="font-label-caps text-label-caps group-hover:translate-x-1 duration-300">Settings</span>
+</a>
+</div>
+<div class="px-margin mt-auto">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-variant overflow-hidden border border-outline-variant/30">
+<img alt="Executive Portrait" class="w-full h-full object-cover" data-alt="A cinematic, high-contrast portrait of a corporate executive in a bespoke tailored suit, lit with dramatic rim lighting against a deep, moody background. The aesthetic reflects elite, high-stakes corporate power, using a sophisticated color grading of deep blacks, rich teals, and warm amber highlights to convey authority and luxury." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA8s57TOJuNPGEoSoBN_hzI8l4o1SGCuVqyvAwvPnBHDFajR-4vSUFXqy4_lBvvrV4hSpyy-aWZYp9IUdLxIvTJbTjQgLGmElKnXDHg58kjcI56sn1L9Wis9lTCoBoiAjQq54kC9w-Uw1DlqW-gt7Fp3E3lpTml45OD-gp6aOemqR1-m8o9LILzTQf2j8OO1D01U2fOqm5---THbbmeY296CAISbKDLLzki0rlw0_g-qZML7idC_mMlaoTlGizFlvikXCmq1Lp7DUo"/>
+</div>
+<div class="flex flex-col">
+<span class="font-label-caps text-label-caps text-on-surface">Director</span>
+<span class="font-data-mono text-data-mono text-on-surface-variant">Global Assets</span>
+</div>
+</div>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 flex flex-col md:ml-[280px] w-full relative">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full md:w-[calc(100%-280px)] z-40 flex justify-between items-center px-margin py-phi-sm bg-background/60 backdrop-blur-3xl border-b border-outline-variant/10 shadow-sm backdrop-saturate-150 transition-all">
+<div class="flex items-center gap-4">
+<span class="font-headline-lg text-headline-lg text-primary tracking-tight font-light hidden md:block">LUMINA</span>
+<div class="h-6 w-px bg-outline-variant/30 hidden md:block"></div>
+<h1 class="font-metric-xl text-metric-xl text-on-surface">Competitor Analytics</h1>
+</div>
+<div class="flex items-center gap-phi-md">
+<button class="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:text-surface-tint hover:bg-surface-variant/30 transition-colors duration-300 scale-95 active:scale-90">
+<span class="material-symbols-outlined">monitoring</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:text-surface-tint hover:bg-surface-variant/30 transition-colors duration-300 scale-95 active:scale-90">
+<span class="material-symbols-outlined">psychology</span>
+</button>
+</div>
+</header>
+<!-- Scrollable Canvas -->
+<main class="flex-1 overflow-y-auto pt-[100px] px-margin pb-margin">
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-phi-lg">
+<!-- Feature Comparison Table (Spans full width) -->
+<div class="col-span-1 md:col-span-12 glass-panel rounded-xl p-phi-lg relative overflow-hidden group">
+<div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+<div class="flex justify-between items-end mb-phi-md">
+<div>
+<h2 class="font-metric-xl text-metric-xl text-on-surface">Asset Parity Matrix</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">High-end facilities and service tier comparison</p>
+</div>
+<button class="px-4 py-2 border border-outline-variant/30 rounded-lg font-label-caps text-label-caps text-on-surface hover:bg-surface-variant/30 hover:border-primary/50 transition-all">Export Report</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-outline-variant/20 font-label-caps text-label-caps text-on-surface-variant">
+<th class="py-4 px-4 font-normal">Property</th>
+<th class="py-4 px-4 font-normal">Tier</th>
+<th class="py-4 px-4 font-normal">Spa Quality</th>
+<th class="py-4 px-4 font-normal">Dining (Michelin)</th>
+<th class="py-4 px-4 font-normal">Concierge Ratio</th>
+<th class="py-4 px-4 font-normal text-right">RevPAR Index</th>
+</tr>
+</thead>
+<tbody class="font-data-mono text-data-mono">
+<tr class="border-b border-outline-variant/10 hover:bg-surface-variant/10 transition-colors group/row">
+<td class="py-4 px-4 text-on-surface font-medium flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(78,222,163,0.8)]"></div>
+                                        Lumina (Self)
+                                    </td>
+<td class="py-4 px-4 text-primary">Ultra-Luxury</td>
+<td class="py-4 px-4"><div class="w-full bg-surface-variant h-1 rounded-full overflow-hidden"><div class="bg-primary h-full w-[95%]"></div></div></td>
+<td class="py-4 px-4 text-on-surface">2 Stars</td>
+<td class="py-4 px-4 text-on-surface">1:4</td>
+<td class="py-4 px-4 text-right text-primary">112.4</td>
+</tr>
+<tr class="border-b border-outline-variant/10 hover:bg-surface-variant/10 transition-colors group/row">
+<td class="py-4 px-4 text-on-surface flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_rgba(233,195,73,0.5)]"></div>
+                                        Carlton
+                                    </td>
+<td class="py-4 px-4 text-on-surface-variant">Luxury</td>
+<td class="py-4 px-4"><div class="w-full bg-surface-variant h-1 rounded-full overflow-hidden"><div class="bg-secondary h-full w-[85%]"></div></div></td>
+<td class="py-4 px-4 text-on-surface-variant">1 Star</td>
+<td class="py-4 px-4 text-on-surface-variant">1:6</td>
+<td class="py-4 px-4 text-right text-on-surface">104.2</td>
+</tr>
+<tr class="border-b border-outline-variant/10 hover:bg-surface-variant/10 transition-colors group/row">
+<td class="py-4 px-4 text-on-surface flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-tertiary"></div>
+                                        Le Poshe
+                                    </td>
+<td class="py-4 px-4 text-on-surface-variant">Boutique Lux</td>
+<td class="py-4 px-4"><div class="w-full bg-surface-variant h-1 rounded-full overflow-hidden"><div class="bg-tertiary h-full w-[90%]"></div></div></td>
+<td class="py-4 px-4 text-on-surface-variant">None</td>
+<td class="py-4 px-4 text-on-surface-variant">1:3</td>
+<td class="py-4 px-4 text-right text-on-surface">98.7</td>
+</tr>
+<tr class="border-b border-outline-variant/10 hover:bg-surface-variant/10 transition-colors group/row">
+<td class="py-4 px-4 text-on-surface flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-outline"></div>
+                                        Tamara
+                                    </td>
+<td class="py-4 px-4 text-on-surface-variant">Upper Upscale</td>
+<td class="py-4 px-4"><div class="w-full bg-surface-variant h-1 rounded-full overflow-hidden"><div class="bg-outline h-full w-[70%]"></div></div></td>
+<td class="py-4 px-4 text-on-surface-variant">None</td>
+<td class="py-4 px-4 text-on-surface-variant">1:10</td>
+<td class="py-4 px-4 text-right text-on-surface">88.5</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: kodairateiq-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kodairateiq
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: kodairateiq_dev_2024
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Application (optional — for production)
+  # app:
+  #   build: .
+  #   container_name: kodairateiq-app
+  #   restart: unless-stopped
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   environment:
+  #     DATABASE_URL: postgresql://postgres:kodairateiq_dev_2024@postgres:5432/kodairateiq?schema=public
+  #   ports:
+  #     - '3000:3000'
+
+volumes:
+  postgres_data:

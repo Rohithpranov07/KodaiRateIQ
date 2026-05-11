@@ -1,0 +1,31 @@
+# GitHub Actions: Daily Rate Scraping Cron
+name: Daily Rate Scrape
+
+on:
+  schedule:
+    # Run at 6 AM, 12 PM, and 6 PM IST (12:30 AM, 6:30 AM, 12:30 PM UTC)
+    - cron: '30 0 * * *'   # 6:00 AM IST
+    - cron: '30 6 * * *'   # 12:00 PM IST
+    - cron: '30 12 * * *'  # 6:00 PM IST
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Trigger Scraping
+        run: |
+          curl -f -X GET "${{ secrets.APP_URL }}/api/cron?secret=${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --max-time 300 \
+            || echo "Scrape trigger failed, will retry on next schedule"
+      
+      - name: Health Check
+        if: always()
+        run: |
+          curl -f "${{ secrets.APP_URL }}/api/rates/live" \
+            -H "Content-Type: application/json" \
+            --max-time 30 \
+            || echo "Health check failed"
