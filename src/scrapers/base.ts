@@ -2,14 +2,10 @@
 // KodaiRateIQ — Base Scraper Class
 // ============================================================
 
-import { chromium } from 'playwright-extra';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+// Only type imports at module level — no playwright/stealth code runs during build
 import type { Browser, BrowserContext, Page } from 'playwright';
 import type { ScrapedRate, ScrapeResult, ScraperConfig } from '@/types';
 import { sleep } from '@/lib/utils';
-
-chromium.use(StealthPlugin());
 
 const RETRYABLE_ERRORS = [
   'ERR_NAME_NOT_RESOLVED',
@@ -48,6 +44,13 @@ class BrowserManager {
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = (async () => {
+      // Dynamic requires — deferred to runtime, never evaluated during Next.js build
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { chromium } = require('playwright-extra');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+      chromium.use(StealthPlugin());
+
       this.browser = await chromium.launch({
         headless: true,
         chromiumSandbox: false,
@@ -60,7 +63,7 @@ class BrowserManager {
         ],
       });
 
-      this.context = await this.browser.newContext({
+      this.context = await this.browser!.newContext({
         userAgent: CHROME_UA,
         viewport: { width: 1366, height: 768 },
         locale: 'en-IN',

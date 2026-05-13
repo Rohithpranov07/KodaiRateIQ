@@ -6,24 +6,10 @@
 // Validates that Playwright's bundled Chromium launches correctly
 // inside the Railway Docker container.
 //
-// Test sequence:
-//   1. chromium.launch() with production args
-//   2. browser.newPage()
-//   3. page.goto("https://example.com")
-//   4. page.title()
-//   5. browser.close()
-//
-// Returns detailed launch errors in JSON for fast diagnosis.
-//
 // TO REMOVE: delete src/app/api/debug/ entirely
 // ============================================================
 
 import { NextResponse } from 'next/server';
-import { chromium } from 'playwright-extra';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-
-chromium.use(StealthPlugin());
 
 export const dynamic    = 'force-dynamic';
 export const revalidate = 0;
@@ -33,7 +19,6 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const secret = searchParams.get('secret');
 
-  // ── Auth guard ──────────────────────────────────────────────
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret && secret !== cronSecret) {
     return NextResponse.json({ success: false, error: 'Unauthorised' }, { status: 401 });
@@ -44,30 +29,34 @@ export async function GET(request: Request) {
   const mark = (step: string, ok: boolean, detail?: string, t0 = start) =>
     steps.push({ step, ok, detail, ms: Date.now() - t0 });
 
-  // ── Environment info ────────────────────────────────────────
   const env = {
-    NODE_ENV:                process.env.NODE_ENV,
+    NODE_ENV:                 process.env.NODE_ENV,
     PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH ?? '(default)',
-    CHROMIUM_PATH:           process.env.CHROMIUM_PATH ?? '(not set — using bundled)',
+    CHROMIUM_PATH:            process.env.CHROMIUM_PATH ?? '(not set — using bundled)',
   };
 
-  let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null;
+  // All playwright/stealth requires are inside the handler — never run at build time
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { chromium } = require('playwright-extra');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+  chromium.use(StealthPlugin());
+
+  let browser: any = null;
   let pageTitle: string | null = null;
   let launchError: string | null = null;
 
-  // ── Step 1: Locate the bundled executable ───────────────────
+  // ── Step 1: Locate bundled executable ───────────────────────
   let executablePath: string | null = null;
   try {
     executablePath = chromium.executablePath();
-    mark('locate-executable', true, executablePath);
+    mark('locate-executable', true, executablePath ?? undefined);
   } catch (err: any) {
     mark('locate-executable', false, err.message);
     return NextResponse.json({
       success: false,
       error: `Playwright cannot find bundled Chromium: ${err.message}`,
-      env,
-      steps,
-      durationMs: Date.now() - start,
+      env, steps, durationMs: Date.now() - start,
     }, { status: 500 });
   }
 
@@ -76,30 +65,22 @@ export async function GET(request: Request) {
   try {
     browser = await chromium.launch({
       headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-      ],
+      chromiumSandbox: false,
+      args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--disable-http2', '--disable-blink-features=AutomationControlled'],
     });
-    mark('launch-browser', true, `pid ${(browser as any).process()?.pid ?? 'unknown'}`, t2);
+    mark('launch-browser', true, `pid ${browser.process()?.pid ?? 'unknown'}`, t2);
   } catch (err: any) {
     launchError = err.message;
     mark('launch-browser', false, err.message, t2);
     return NextResponse.json({
-      success: false,
-      error: `chromium.launch() failed: ${launchError}`,
-      executablePath,
-      env,
-      steps,
-      durationMs: Date.now() - start,
+      success: false, error: `chromium.launch() failed: ${launchError}`,
+      executablePath, env, steps, durationMs: Date.now() - start,
     }, { status: 500 });
   }
 
   // ── Step 3: New page ────────────────────────────────────────
   const t3 = Date.now();
-  let page: Awaited<ReturnType<typeof browser.newPage>> | null = null;
+  let page: any = null;
   try {
     page = await browser.newPage();
     mark('new-page', true, undefined, t3);
@@ -107,29 +88,25 @@ export async function GET(request: Request) {
     mark('new-page', false, err.message, t3);
     await browser.close().catch(() => {});
     return NextResponse.json({
-      success: false,
-      error: `browser.newPage() failed: ${err.message}`,
-      env,
-      steps,
-      durationMs: Date.now() - start,
+      success: false, error: `browser.newPage() failed: ${err.message}`,
+      env, steps, durationMs: Date.now() - start,
     }, { status: 500 });
   }
 
-  // ── Step 4: Navigate to example.com ─────────────────────────
+  // ── Step 4: Navigate ────────────────────────────────────────
   const t4 = Date.now();
   try {
     await page.goto('https://example.com', { waitUntil: 'domcontentloaded', timeout: 15000 });
     mark('goto-example.com', true, page.url(), t4);
   } catch (err: any) {
     mark('goto-example.com', false, err.message, t4);
-    // Non-fatal — network may be blocked; browser still works
   }
 
-  // ── Step 5: Read title ──────────────────────────────────────
+  // ── Step 5: Title ───────────────────────────────────────────
   const t5 = Date.now();
   try {
     pageTitle = await page.title();
-    mark('page-title', true, pageTitle, t5);
+    mark('page-title', true, pageTitle ?? '', t5);
   } catch (err: any) {
     mark('page-title', false, err.message, t5);
   }
@@ -146,9 +123,7 @@ export async function GET(request: Request) {
   const allPassed = steps.every(s => s.ok);
 
   return NextResponse.json({
-    // ⚠️ TEMPORARY DEBUG ROUTE
     _warning: 'Temporary debug endpoint — remove before GA launch.',
-
     success: allPassed,
     executablePath,
     pageTitle,
