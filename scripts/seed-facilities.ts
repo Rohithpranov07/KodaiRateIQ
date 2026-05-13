@@ -450,6 +450,7 @@ async function seedFacilities() {
       await prisma.facility.create({
         data: {
           hotelId: hotel.id,
+          normalizedKey: fac.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
           name: fac.name,
           category: fac.category,
           available: true,
