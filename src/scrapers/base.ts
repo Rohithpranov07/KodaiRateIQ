@@ -41,15 +41,24 @@ export abstract class BaseScraper {
    */
   protected async launchBrowser(): Promise<void> {
     if (this.browser) return;
-    
+
+    // In Docker/Railway, use the system Chromium installed by the Dockerfile.
+    // CHROMIUM_PATH is set to /usr/bin/chromium-browser in the base image.
+    const executablePath = process.env.CHROMIUM_PATH || undefined;
+
     this.browser = await chromium.launch({
       headless: this.config.headless,
+      executablePath,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-accelerated-2d-canvas',
         '--disable-gpu',
+        '--single-process',           // required in constrained containers
+        '--no-zygote',                // prevents zygote sandbox crash
+        '--disable-background-networking',
+        '--disable-extensions',
       ],
     });
 
