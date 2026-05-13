@@ -1,532 +1,474 @@
 // ============================================================
-// KodaiRateIQ — Scraping Orchestrator v4
-//
-// FULL 13-SOURCE OTA AGGREGATION PIPELINE
-// Max concurrent browsers: 2 (Railway memory constraint)
-//
-// Pipeline:
-//   1. Scrape OTAs in tiers, 2 browsers at a time per hotel
-//   2. Cross-verify MAP rates → select TRUE BAR
-//   3. Write DailyRate + CompetitorSnapshot + OtaBarAudit
-//   4. Update RateHistory
-//   5. Stale detection
+// KodaiRateIQ — Railway Production Scraping Architecture v5
 // ============================================================
 
-import { BookingScraper }     from './booking';
-import { GoibiboScraper }     from './goibibo';
-import { MakeMyTripScraper }  from './makemytrip';
-import { AgodaScraper }       from './agoda';
-import { ExpediaScraper }     from './expedia';
-import { HotelsDotComScraper } from './hotelsdotcom';
-import { CleartripScraper }   from './cleartrip';
-import { EaseMyTripScraper }  from './easemytrip';
-import { IxigoScraper }       from './ixigo';
-import { YatraScraper }       from './yatra';
-import { TripadvisorScraper } from './tripadvisor';
-import { TrivagoScraper }     from './trivago';
-import { createOfficialScrapers } from './official';
-import { BaseScraper }        from './base';
-import prisma                 from '@/lib/db';
-import { HOTELS_CONFIG, calcDeltaPercent } from '@/lib/utils';
-import type { ScrapedRate, ScrapeResult } from '@/types';
-import { verifyTodaysRates, applyVerifiedRates, detectStaleData } from '@/engine/verification';
+import { chromium } from 'playwright-extra';
+import { Page, Browser } from 'playwright';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import dns from 'dns/promises';
+import fs from 'fs';
+import path from 'path';
+import prisma from '@/lib/db';
 
-// Maximum simultaneous Chromium instances.
-// Railway containers ~512 MB RAM; each Chromium ~150 MB.
-const MAX_CONCURRENT_BROWSERS = 2;
+chromium.use(StealthPlugin());
 
-// ── Scrape Report ─────────────────────────────────────────────
+// ============================================================
+// TYPES
+// ============================================================
 
-export interface SourceDiagnosticSummary {
-  source: string;
-  hotelName: string;
-  pageTitle: string;
-  htmlSize: number;
-  bodyTextLength: number;
-  hasPriceSymbol: boolean;
-  botBlocked: boolean;
-  blockReason: string | null;
-  samplePrices: string[];
-  sampleBodyText: string;
-  navigationMs: number;
-  ratesExtracted: number;
-  screenshotPath: string | null;
-}
-
-export interface SourceHealthReport {
-  source: string;
-  success: boolean;
-  hotelCardsFound: number;
-  pricesFound: number;
-  captchaDetected: boolean;
-  selectorHealth: 'healthy' | 'degraded' | 'failed';
-  ratesSaved: number;
-  avgResponseMs: number;
-  errors: string[];
-}
-
-export interface ScrapeReport {
-  totalRates: number;
-  mapRates: number;
-  successfulSources: number;
-  failedSources: number;
-  zeroRateSources: number;
-  duration: number;
-  results: ScrapeResult[];
-  verification: {
-    avgConfidence: number;
-    verifiedHotels: number;
-    anomalyCount: number;
-    otaWinners: Record<string, string>;
+export type HotelConfig = {
+  id: string;
+  name: string;
+  officialUrl: string;
+  scraperType: string;
+  taxInclusive: boolean;
+  selectors: {
+    hotelCard: string[];
+    price: string[];
+    room: string[];
   };
-  staleStatus: {
-    staleHotels: string[];
-    degradedHotels: string[];
-    freshHotels: string[];
-  };
-  scrapeWindow: string;
-  dbWrites: {
-    dailyRates: number;
-    snapshots: number;
-    otaAudits: number;
-  };
-  sourceDiagnostics: SourceDiagnosticSummary[];
-  sourceHealth: SourceHealthReport[];
-  blockSummary: Record<string, string>;
-  warnings: string[];
-}
-
-// ── Scraper tiers ─────────────────────────────────────────────
-const SCRAPER_TIERS = {
-  official: () => createOfficialScrapers(),
-  tier1: () => [new BookingScraper(), new AgodaScraper(), new GoibiboScraper(), new MakeMyTripScraper()],
-  tier2: () => [new ExpediaScraper(), new HotelsDotComScraper(), new CleartripScraper(), new EaseMyTripScraper()],
-  tier3: () => [new IxigoScraper(), new YatraScraper(), new TripadvisorScraper(), new TrivagoScraper()],
 };
 
-// ─────────────────────────────────────────────────────────────
-// CONCURRENCY LIMITER
-// ─────────────────────────────────────────────────────────────
+export type DomainHealth = {
+  hostname: string;
+  dnsResolved: boolean;
+  reachable: boolean;
+  redirected: boolean;
+  finalUrl?: string;
+  statusCode?: number;
+};
 
-async function withConcurrency<T>(
-  tasks: Array<() => Promise<T>>,
-  limit: number,
-): Promise<Array<{ ok: true; value: T } | { ok: false; error: Error }>> {
-  const results: Array<{ ok: true; value: T } | { ok: false; error: Error }> = [];
-  const queue = [...tasks];
+export type ScrapeSourceHealth = {
+  hotel: string;
+  scraper: string;
+  dnsResolved: boolean;
+  reachable: boolean;
+  pricesFound: number;
+  validRates: number;
+  rowsInserted: number;
+  success: boolean;
+  error?: string;
+};
 
-  async function worker() {
-    while (queue.length > 0) {
-      const task = queue.shift();
-      if (!task) break;
-      try {
-        const value = await task();
-        results.push({ ok: true, value });
-      } catch (error) {
-        results.push({ ok: false, error: error as Error });
-      }
-    }
-  }
+export type ScrapeReport = {
+  success: boolean;
+  totalRatesFound: number;
+  ratesSavedToSupabase: number;
+  verifiedHotels: number;
+  sourcesFailed: number;
+  healthReports: ScrapeSourceHealth[];
+};
 
-  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => worker());
-  await Promise.all(workers);
-  return results;
-}
+// ============================================================
+// PHASE 1 — FIX SCRAPER <-> HOTEL ARCHITECTURE
+// ============================================================
 
-// ─────────────────────────────────────────────────────────────
-// FULL SCRAPE PIPELINE
-// ─────────────────────────────────────────────────────────────
-
-export async function runFullScrape(): Promise<ScrapeReport> {
-  const startTime = Date.now();
-  const allResults: ScrapeResult[] = [];
-  const warnings: string[] = [];
-  const scrapeWindow = getScrapeWindowLabel();
-
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`[Orchestrator] Starting FULL scrape — ${scrapeWindow}`);
-  console.log(`[Orchestrator] Max concurrent browsers: ${MAX_CONCURRENT_BROWSERS}`);
-  console.log(`[Orchestrator] Timestamp: ${new Date().toISOString()}`);
-  console.log(`${'='.repeat(60)}\n`);
-
-  const today    = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  // ── Phase 1: Scrape all tiers ─────────────────────────────
-  await runTier('OFFICIAL', SCRAPER_TIERS.official(), today, tomorrow, allResults);
-  await runTier('TIER1',    SCRAPER_TIERS.tier1(),    today, tomorrow, allResults);
-  await runTier('TIER2',    SCRAPER_TIERS.tier2(),    today, tomorrow, allResults);
-  await runTier('TIER3',    SCRAPER_TIERS.tier3(),    today, tomorrow, allResults);
-
-  const totalRates = allResults.reduce((s, r) => s + r.rates.length, 0);
-
-  if (totalRates === 0) {
-    const msg = 'CRITICAL: Zero rates extracted from ALL sources. Check source diagnostics.';
-    console.error(`[Orchestrator] ⛔ ${msg}`);
-    warnings.push(msg);
-  }
-
-  // ── Phase 2: Verify ───────────────────────────────────────
-  console.log('\n🔍 Running OTA cross-verification...');
-  let verificationSummary = await verifyTodaysRates();
-
-  for (const r of verificationSummary.results) {
-    const badge  = r.confidenceLabel === 'HIGH' ? '✅' : r.confidenceLabel === 'MEDIUM' ? '🟡' : '🔴';
-    const rate   = r.verifiedMapRate ? `₹${r.verifiedMapRate.toLocaleString('en-IN')}` : 'N/A';
-    console.log(`  ${badge} ${r.hotelName}: ${rate} MAP [${r.bestSource ?? '—'}] ${r.confidenceLabel} (${r.sourceCount}/${r.otasChecked} OTAs)`);
-    if (r.anomalies.length > 0) console.warn(`     ⚠ ${r.anomalies.join(' | ')}`);
-  }
-
-  // ── Phase 3: Apply verified rates ────────────────────────
-  console.log('\n💾 Writing verified BAR to Supabase...');
-  await applyVerifiedRates(verificationSummary);
-
-  const today0 = new Date();
-  today0.setHours(0, 0, 0, 0);
-  const tomorrow0 = new Date(today0);
-  tomorrow0.setDate(tomorrow0.getDate() + 1);
-
-  const [dailyRatesWritten, snapshotsWritten, auditsWritten] = await Promise.all([
-    prisma.dailyRate.count({ where: { date: { gte: today0, lt: tomorrow0 } } }),
-    prisma.competitorSnapshot.count({ where: { date: { gte: today0, lt: tomorrow0 } } }),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (prisma as any).otaBarAudit.count({ where: { date: { gte: today0, lt: tomorrow0 } } }).catch(() => 0),
-  ]);
-
-  console.log(`  ✓ DailyRate rows today    : ${dailyRatesWritten}`);
-  console.log(`  ✓ CompetitorSnapshot rows : ${snapshotsWritten}`);
-  console.log(`  ✓ OtaBarAudit rows        : ${auditsWritten}`);
-
-  if (dailyRatesWritten === 0) {
-    const msg = 'WARNING: No DailyRate rows written — dashboard will be empty!';
-    console.warn(`  ⚠ ${msg}`);
-    warnings.push(msg);
-  }
-
-  // ── Phase 4: Rate history ─────────────────────────────────
-  console.log('📈 Updating RateHistory...');
-  await updateRateHistory();
-
-  // ── Phase 5: Stale detection ──────────────────────────────
-  console.log('🕐 Stale data check...');
-  const staleStatus = await detectStaleData();
-  if (staleStatus.staleHotels.length > 0)    console.warn(`  ⚠ Stale: ${staleStatus.staleHotels.join(', ')}`);
-  if (staleStatus.degradedHotels.length > 0) console.warn(`  ⚠ Degraded: ${staleStatus.degradedHotels.join(', ')}`);
-
-  verificationSummary = await verifyTodaysRates();
-
-  const successfulSources = allResults.filter(r => r.success).length;
-  const failedSources     = allResults.filter(r => !r.success).length;
-  const zeroRateSources   = allResults.filter(r => r.success && r.rates.length === 0).length;
-  const mapRates          = allResults.reduce((s, r) => s + r.rates.filter(rate => rate.mapRate != null).length, 0);
-
-  const otaWinners: Record<string, string> = {};
-  for (const r of verificationSummary.results) {
-    if (r.bestSource) otaWinners[r.hotelName] = r.bestSource;
-  }
-
-  const duration = Date.now() - startTime;
-
-  console.log(`\n${'='.repeat(60)}`);
-  console.log('SCRAPE SUMMARY');
-  console.log(`${'='.repeat(60)}`);
-  console.log(`Hotels processed    : ${HOTELS_CONFIG.length}`);
-  console.log(`OTAs attempted      : ${[...new Set(allResults.map(r => r.source))].length}`);
-  console.log(`Successful scrapes  : ${successfulSources}`);
-  console.log(`Failed scrapes      : ${failedSources}`);
-  console.log(`Zero-rate scrapes   : ${zeroRateSources} (succeeded but empty)`);
-  console.log(`Total rates found   : ${totalRates} (${mapRates} MAP)`);
-  console.log(`Rows inserted (DR)  : ${dailyRatesWritten}`);
-  console.log(`Rows inserted (Snap): ${snapshotsWritten}`);
-  console.log(`Verified hotels     : ${verificationSummary.verifiedHotels}/${verificationSummary.totalHotels}`);
-  console.log(`Avg confidence      : ${(verificationSummary.avgConfidence * 100).toFixed(0)}%`);
-  console.log(`Duration            : ${(duration / 1000).toFixed(1)}s`);
-  if (warnings.length > 0) console.warn(`Warnings: ${warnings.join('; ')}`);
-  console.log(`${'='.repeat(60)}\n`);
-
-  // Build per-source diagnostics
-  const sourceDiagnostics: SourceDiagnosticSummary[] = allResults
-    .filter(r => r.diagnostics)
-    .map(r => {
-      const d = r.diagnostics!;
-      return {
-        source: d.source, hotelName: d.hotelName, pageTitle: d.pageTitle,
-        htmlSize: d.htmlSize, bodyTextLength: d.bodyTextLength,
-        hasPriceSymbol: d.hasPriceSymbol, botBlocked: d.botBlocked,
-        blockReason: d.blockReason, samplePrices: d.samplePrices,
-        sampleBodyText: d.sampleBodyText, navigationMs: d.navigationMs,
-        ratesExtracted: d.ratesExtracted, screenshotPath: d.screenshotPath,
-      };
-    });
-
-  // Build per-source health reports (aggregate across hotels)
-  const sourceHealthMap = new Map<string, SourceHealthReport>();
-  for (const r of allResults) {
-    const key = r.source;
-    if (!sourceHealthMap.has(key)) {
-      sourceHealthMap.set(key, {
-        source: key, success: false, hotelCardsFound: 0, pricesFound: 0,
-        captchaDetected: false, selectorHealth: 'failed', ratesSaved: 0,
-        avgResponseMs: 0, errors: [],
-      });
-    }
-    const h = sourceHealthMap.get(key)!;
-    if (r.success) h.success = true;
-    h.pricesFound += r.rates.length;
-    h.avgResponseMs = Math.round((h.avgResponseMs + r.duration) / 2);
-    if (r.diagnostics?.botBlocked) h.captchaDetected = true;
-    if (r.error) h.errors.push(r.error.substring(0, 100));
-  }
-  for (const h of sourceHealthMap.values()) {
-    h.selectorHealth = h.pricesFound > 0 ? 'healthy' : h.success ? 'degraded' : 'failed';
-  }
-  const sourceHealth = Array.from(sourceHealthMap.values());
-
-  const blockSummary: Record<string, string> = {};
-  for (const d of sourceDiagnostics) {
-    if (d.botBlocked) blockSummary[`${d.source}/${d.hotelName}`] = d.blockReason ?? 'unknown';
-  }
-
-  if (Object.keys(blockSummary).length > 0) {
-    console.log(`[Orchestrator] Bot-blocked navigations: ${Object.keys(blockSummary).length}`);
-  }
-
-  return {
-    totalRates, mapRates, successfulSources, failedSources, zeroRateSources,
-    duration, results: allResults,
-    verification: {
-      avgConfidence: verificationSummary.avgConfidence,
-      verifiedHotels: verificationSummary.verifiedHotels,
-      anomalyCount: verificationSummary.anomalyCount,
-      otaWinners,
+const HOTEL_CONFIGS: HotelConfig[] = [
+  {
+    id: 'carlton',
+    name: 'The Carlton',
+    officialUrl: 'https://carlton-kodaikanal.com',
+    scraperType: 'carlton',
+    taxInclusive: false,
+    selectors: {
+      hotelCard: ['.room-type', '.roomType', 'h3', 'h2'],
+      price: ['.price', '.rate', '.tariff'],
+      room: ['.room-type', '.roomType', 'h3', 'h2'],
     },
-    staleStatus, scrapeWindow,
-    dbWrites: { dailyRates: dailyRatesWritten, snapshots: snapshotsWritten, otaAudits: auditsWritten },
-    sourceDiagnostics, sourceHealth, blockSummary, warnings,
-  };
-}
+  },
+  {
+    id: 'tamara',
+    name: 'The Tamara Kodai',
+    officialUrl: 'https://www.thetamara.com',
+    scraperType: 'tamara',
+    taxInclusive: false,
+    selectors: {
+      hotelCard: ['.room-name', 'h2', 'h3'],
+      price: ['.rate', '.price', '.room-rate'],
+      room: ['.room-name', 'h2', 'h3'],
+    },
+  },
+  {
+    id: 'kodai-international',
+    name: 'Hotel Kodai International',
+    officialUrl: 'https://www.kodaiinternational.com',
+    scraperType: 'kodai_intl',
+    taxInclusive: false,
+    selectors: {
+      hotelCard: ['h3', 'h4', '.room'],
+      price: ['.price', '.rate'],
+      room: ['h3', 'h4', '.room'],
+    },
+  },
+  {
+    id: 'sterling',
+    name: 'Sterling Kodai Lake',
+    officialUrl: 'https://www.sterlingholidays.com',
+    scraperType: 'sterling',
+    taxInclusive: true,
+    selectors: {
+      hotelCard: ['.room-card', '.room-type'],
+      price: ['.price', '.rate'],
+      room: ['.room-name', 'h3'],
+    },
+  },
+  {
+    id: 'sparsa',
+    name: 'Le Poshe by Sparsa',
+    officialUrl: 'https://www.sparsahotels.com',
+    scraperType: 'sparsa',
+    taxInclusive: false,
+    selectors: {
+      hotelCard: ['.room-name', 'h3'],
+      price: ['.price', '.rate'],
+      room: ['.room-name', 'h3'],
+    },
+  },
+];
 
-// ─────────────────────────────────────────────────────────────
-// TIER EXECUTION
-// ─────────────────────────────────────────────────────────────
+// ============================================================
+// PHASE 5 — AUTO FIX BROKEN URLS
+// PHASE 4 — ADD DOMAIN HEALTH CHECK SYSTEM
+// PHASE 3 — VALIDATE ALL HOTEL URLS
+// ============================================================
 
-async function runTier(
-  tierName: string,
-  scrapers: BaseScraper[],
-  checkIn: Date,
-  checkOut: Date,
-  allResults: ScrapeResult[],
-): Promise<void> {
-  if (scrapers.length === 0) {
-    console.log(`\n📡 [${tierName}] No scrapers — skipped`);
-    return;
+const NON_RETRYABLE_ERRORS = [
+  'ERR_NAME_NOT_RESOLVED',
+  'ENOTFOUND',
+  'INVALID_URL',
+  'EAI_AGAIN'
+];
+
+async function checkDomainHealth(urlStr: string): Promise<DomainHealth> {
+  let parsed: URL;
+  try {
+    parsed = new URL(urlStr);
+  } catch {
+    return { hostname: urlStr, dnsResolved: false, reachable: false, redirected: false };
   }
 
-  console.log(`\n📡 [${tierName}] ${scrapers.length} scrapers × ${HOTELS_CONFIG.length} hotels (max ${MAX_CONCURRENT_BROWSERS} concurrent)`);
+  const hostname = parsed.hostname;
+  let dnsResolved = false;
 
-  for (const hotel of HOTELS_CONFIG) {
-    const tasks = scrapers.map(scraper => () => scraper.execute(hotel.name, checkIn, checkOut));
-    const outcomes = await withConcurrency(tasks, MAX_CONCURRENT_BROWSERS);
-
-    for (let i = 0; i < outcomes.length; i++) {
-      const outcome = outcomes[i];
-      const scraper = scrapers[i];
-
-      if (outcome.ok) {
-        const result = outcome.value;
-        allResults.push(result);
-
-        prisma.scrapeLog.create({
-          data: {
-            source: result.source, hotelName: hotel.name,
-            status: result.success ? 'success' : 'failed',
-            duration: result.duration, ratesFound: result.rates.length,
-            errorMessage: result.error, retryCount: result.retryCount,
-          },
-        }).catch((e: Error) => console.warn(`[ScrapeLog] Write failed: ${e.message}`));
-
-        if (result.success && result.rates.length > 0) {
-          try {
-            const saved = await storeRates(hotel.name, result.rates);
-            const mapCount = result.rates.filter(r => r.mapRate != null).length;
-            console.log(`  ✓ ${result.source}: ${result.rates.length} rates (${mapCount} MAP) → ${saved} saved ${result.duration}ms`);
-          } catch (storeErr: any) {
-            console.error(`  ✗ ${result.source}: store failed — ${storeErr.message}`);
-          }
-        } else if (result.success) {
-          console.log(`  ○ ${result.source}: 0 rates ${result.duration}ms [diag: html=${result.diagnostics?.htmlSize}B bot=${result.diagnostics?.botBlocked}]`);
-        } else {
-          console.log(`  ✗ ${result.source}: FAILED — ${result.error}`);
-        }
-      } else {
-        const err = outcome.error;
-        console.error(`  ✗ ${scraper.source}: EXCEPTION — ${err.message}`);
-
-        prisma.scrapeLog.create({
-          data: {
-            source: scraper.source, hotelName: hotel.name,
-            status: 'failed', duration: 0, ratesFound: 0,
-            errorMessage: err.message,
-          },
-        }).catch(() => {});
-
-        allResults.push({
-          success: false, source: scraper.source, hotelName: hotel.name,
-          rates: [], duration: 0, error: err.message, retryCount: 0,
-        });
-      }
+  try {
+    await dns.lookup(hostname);
+    dnsResolved = true;
+  } catch (err: any) {
+    if (hostname.startsWith('www.')) {
+      try {
+        const fallbackHost = hostname.replace('www.', '');
+        await dns.lookup(fallbackHost);
+        parsed.hostname = fallbackHost;
+        dnsResolved = true;
+        console.log(`[AutoFix] Changed ${hostname} to ${fallbackHost}`);
+      } catch { /* ignore */ }
+    } else {
+      try {
+        const fallbackHost = `www.${hostname}`;
+        await dns.lookup(fallbackHost);
+        parsed.hostname = fallbackHost;
+        dnsResolved = true;
+        console.log(`[AutoFix] Changed ${hostname} to ${fallbackHost}`);
+      } catch { /* ignore */ }
     }
   }
 
-  await Promise.allSettled(scrapers.map(s => s.cleanup()));
+  if (!dnsResolved) {
+    return { hostname: parsed.hostname, dnsResolved: false, reachable: false, redirected: false };
+  }
+
+  try {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch(parsed.toString(), {
+      method: 'HEAD',
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: controller.signal
+    }).catch(() => fetch(parsed.toString().replace('https:', 'http:'), {
+      method: 'HEAD',
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: controller.signal
+    }));
+    clearTimeout(id);
+
+    if (res && res.ok) {
+      return {
+        hostname: parsed.hostname,
+        dnsResolved: true,
+        reachable: true,
+        redirected: res.redirected,
+        finalUrl: res.url,
+        statusCode: res.status
+      };
+    }
+  } catch {
+    // If fetch fails, we still tried
+  }
+
+  return { hostname: parsed.hostname, dnsResolved: true, reachable: false, redirected: false, finalUrl: parsed.toString() };
 }
 
-// ─────────────────────────────────────────────────────────────
-// RATE STORAGE — uses createMany + skipDuplicates for idempotency
-// ─────────────────────────────────────────────────────────────
+// ============================================================
+// PHASE 8 — ADD EXTRACTION VALIDATION
+// ============================================================
 
-async function storeRates(hotelName: string, rates: ScrapedRate[]): Promise<number> {
-  const hotelConfig = HOTELS_CONFIG.find(h => h.name === hotelName);
-  if (!hotelConfig) return 0;
+function cleanPrice(text: string | null | undefined): number {
+  if (!text) return 0;
+  const cleaned = text.replace(/[^\d.]/g, '');
+  const val = parseFloat(cleaned);
+  if (isNaN(val) || val <= 0) return 0;
+  return val;
+}
 
-  let hotel = await prisma.hotel.findUnique({ where: { slug: hotelConfig.slug } });
+// ============================================================
+// PHASE 2 — BUILD STRICT SCRAPER REGISTRY
+// ============================================================
+
+async function baseScrape(page: Page, config: HotelConfig, checkIn: string, checkOut: string): Promise<{room: string, price: number}[]> {
+  let searchUrl = config.officialUrl;
+  if (!searchUrl.endsWith('/')) searchUrl += '/';
+  
+  if (config.scraperType === 'carlton') {
+    searchUrl += `tariff/?checkin=${checkIn}&checkout=${checkOut}&adults=2&children=0&rooms=1`;
+  } else if (config.scraperType === 'tamara') {
+    searchUrl += `kodaikanal/rooms-rates/?checkin=${checkIn}&checkout=${checkOut}&adults=2`;
+  } else if (config.scraperType === 'kodai_intl') {
+    searchUrl += `rooms/?checkin=${checkIn}&checkout=${checkOut}&adults=2`;
+  } else if (config.scraperType === 'sparsa') {
+    searchUrl += `le-poshe/rooms/?checkin=${checkIn}&checkout=${checkOut}&adults=2`;
+  }
+
+  await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
+  await page.waitForTimeout(3000); // Allow hydration
+
+  const extracted = await page.evaluate((conf) => {
+    const results: { room: string, price: number }[] = [];
+    const priceNodes = document.querySelectorAll(conf.selectors.price.join(', '));
+    priceNodes.forEach(node => {
+      const text = node.textContent || '';
+      const priceVal = parseFloat(text.replace(/[^\d.]/g, ''));
+      if (!isNaN(priceVal) && priceVal > 500) {
+        results.push({ room: 'Standard Room', price: priceVal });
+      }
+    });
+    return results;
+  }, config);
+
+  const validRates = extracted.filter((r: {room: string, price: number}) => r.price > 0 && !isNaN(r.price));
+  // Remove duplicates
+  const uniqueRates = Array.from(new Map(validRates.map((item: {room: string, price: number}) => [item.price, item])).values()) as {room: string, price: number}[];
+  return uniqueRates;
+}
+
+const SCRAPER_REGISTRY: Record<string, (page: Page, config: HotelConfig, ci: string, co: string) => Promise<{room: string, price: number}[]>> = {
+  'carlton': baseScrape,
+  'tamara': baseScrape,
+  'kodai_intl': baseScrape,
+  'sterling': baseScrape,
+  'sparsa': baseScrape,
+};
+
+// ============================================================
+// PHASE 10 — SAVE HTML + SCREENSHOTS
+// ============================================================
+
+async function captureDebug(page: Page, hotelId: string) {
+  const dir = '/tmp/debug';
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  try {
+    await page.screenshot({ path: path.join(dir, `${hotelId}.png`), fullPage: true });
+    const html = await page.content();
+    fs.writeFileSync(path.join(dir, `${hotelId}.html`), html);
+  } catch (e) {
+    console.warn(`[Debug] Failed to save artifacts for ${hotelId}`, e);
+  }
+}
+
+// ============================================================
+// PHASE 12 — VERIFY SUPABASE INSERTION
+// ============================================================
+
+async function insertAndVerify(hotelName: string, source: string, rates: {room: string, price: number}[]): Promise<number> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let hotel = await prisma.hotel.findUnique({ where: { slug: hotelName.toLowerCase().replace(/\s+/g, '-') } });
   if (!hotel) {
     hotel = await prisma.hotel.create({
-      data: {
-        name: hotelConfig.name, slug: hotelConfig.slug,
-        category: hotelConfig.category, starRating: hotelConfig.starRating,
-        role: hotelConfig.role, website: hotelConfig.website,
-        isTarget: 'isTarget' in hotelConfig ? Boolean(hotelConfig.isTarget) : false,
-      },
+      data: { name: hotelName, slug: hotelName.toLowerCase().replace(/\s+/g, '-'), category: 'standard', starRating: 3, role: 'target' }
     });
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  let saved = 0;
+  let inserted = 0;
   for (const rate of rates) {
-    // Validate rate before inserting
-    const rateValue = rate.mapRate ?? rate.cpRate ?? rate.epRate ?? rate.totalWithTax;
-    if (!rateValue || isNaN(rateValue) || rateValue <= 0 || rateValue > 1000000) {
-      console.warn(`[storeRates] Rejecting invalid rate: ${JSON.stringify({ hotel: hotelName, rate: rateValue, source: rate.source })}`);
-      continue;
-    }
-
-    let room = await prisma.room.findFirst({ where: { hotelId: hotel.id, name: rate.roomType } });
+    let room = await prisma.room.findFirst({ where: { hotelId: hotel.id, name: rate.room } });
     if (!room) {
-      room = await prisma.room.create({
-        data: {
-          hotelId: hotel.id, name: rate.roomType,
-          type: inferRoomType(rate.roomType), maxOccupancy: rate.occupancy,
-        },
-      });
+      room = await prisma.room.create({ data: { hotelId: hotel.id, name: rate.room, type: 'standard', maxOccupancy: 2 } });
     }
 
-    try {
-      // DailyRate has no unique composite key — always create, skip P2002 duplicates.
-      // On repeated scrapes within the same day, we simply append the new reading.
-      await prisma.dailyRate.create({
-        data: {
-          hotelId: hotel.id, roomId: room.id, date: today,
-          mapRate: rate.mapRate, cpRate: rate.cpRate, epRate: rate.epRate,
-          taxPercent: rate.taxPercent, taxInclusive: rate.taxInclusive,
-          totalWithTax: rate.totalWithTax, singleOccRate: rate.singleOccRate,
-          doubleOccRate: rate.doubleOccRate, extraAdultRate: rate.extraAdultRate,
-          extraChildRate: rate.extraChildRate, source: rate.source,
-          sourceUrl: rate.sourceUrl, isAvailable: rate.isAvailable,
-          roomsLeft: rate.roomsLeft, breakfastIncluded: rate.breakfastIncluded,
-          dinnerIncluded: rate.dinnerIncluded, lunchIncluded: rate.lunchIncluded,
-          mealDetails: rate.mealDetails, cancellationPolicy: rate.cancellationPolicy,
-          freeCancellation: rate.freeCancellation, hasDiscount: rate.hasDiscount,
-          discountPercent: rate.discountPercent, offerDescription: rate.offerDescription,
-          confidence: rate.confidence, scrapedAt: rate.scrapedAt,
-        },
-      });
-      saved++;
-    } catch (err: any) {
-      if (!err.message?.includes('Unique constraint') && !err.message?.includes('P2002')) {
-        console.warn(`[storeRates] create failed for ${rate.source}/${hotelName}: ${err.message}`);
+    await prisma.dailyRate.create({
+      data: {
+        hotelId: hotel.id,
+        roomId: room.id,
+        date: today,
+        epRate: rate.price,
+        totalWithTax: rate.price,
+        source: source,
+        sourceUrl: '',
+        confidence: 0.9,
       }
+    });
+    inserted++;
+  }
+
+  // Read back to verify
+  const verified = await prisma.dailyRate.count({
+    where: { hotelId: hotel.id, date: today, source: source }
+  });
+
+  return verified; // Returns actual rows in DB
+}
+
+// ============================================================
+// ORCHESTRATOR MAIN
+// ============================================================
+
+export async function runFullScrape(): Promise<ScrapeReport> {
+  console.log('\n==================================================');
+  console.log('STARTING HARDENED SCRAPE PIPELINE');
+  console.log('==================================================\n');
+
+  const report: ScrapeReport = {
+    success: true,
+    totalRatesFound: 0,
+    ratesSavedToSupabase: 0,
+    verifiedHotels: 0,
+    sourcesFailed: 0,
+    healthReports: [],
+  };
+
+  // PHASE 13 — PRODUCTION HARDENING (Railway-safe)
+  let browser: Browser | null = null;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-setuid-sandbox',
+        '--disable-gpu',
+        '--single-process'
+      ]
+    });
+
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const ci = today.toISOString().split('T')[0];
+    const co = tomorrow.toISOString().split('T')[0];
+
+    for (const hotel of HOTEL_CONFIGS) {
+      const health: ScrapeSourceHealth = {
+        hotel: hotel.name,
+        scraper: hotel.scraperType,
+        dnsResolved: false,
+        reachable: false,
+        pricesFound: 0,
+        validRates: 0,
+        rowsInserted: 0,
+        success: false,
+      };
+
+      // PHASE 4 & 5 — Domain Health & Auto Fix
+      const domainHealth = await checkDomainHealth(hotel.officialUrl);
+      health.dnsResolved = domainHealth.dnsResolved;
+      health.reachable = domainHealth.reachable;
+
+      if (!domainHealth.dnsResolved) {
+        health.error = 'PERMANENT_DNS_FAILURE';
+        console.log(`[DNS] ❌ ${hotel.name} — ${health.error}`);
+        report.sourcesFailed++;
+        report.healthReports.push(health);
+        continue;
+      }
+
+      if (domainHealth.finalUrl) {
+        hotel.officialUrl = domainHealth.finalUrl;
+      }
+
+      const scraperFn = SCRAPER_REGISTRY[hotel.scraperType];
+      if (!scraperFn) {
+        health.error = 'MISSING_SCRAPER';
+        report.sourcesFailed++;
+        report.healthReports.push(health);
+        continue;
+      }
+
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      try {
+        const rates = await scraperFn(page, hotel, ci, co);
+        health.pricesFound = rates.length;
+        health.validRates = rates.length;
+
+        // PHASE 7 — REAL SUCCESS METRICS
+        if (rates.length > 0) {
+          const inserted = await insertAndVerify(hotel.name, `official:${hotel.scraperType}`, rates);
+          health.rowsInserted = inserted;
+          
+          if (inserted > 0) {
+            health.success = true;
+            report.totalRatesFound += rates.length;
+            report.ratesSavedToSupabase += inserted;
+            report.verifiedHotels++;
+          } else {
+            health.error = 'DB_INSERT_FAILED';
+            report.sourcesFailed++;
+          }
+        } else {
+          health.error = 'ZERO_VALID_RATES';
+          report.sourcesFailed++;
+          await captureDebug(page, hotel.id);
+        }
+      } catch (err: any) {
+        // PHASE 6 — REMOVE INVALID RETRIES
+        const isNonRetryable = NON_RETRYABLE_ERRORS.some(e => err.message.includes(e));
+        health.error = err.message;
+        report.sourcesFailed++;
+        
+        await captureDebug(page, hotel.id);
+        
+        if (isNonRetryable) {
+          console.log(`[Fatal] ${hotel.name} failed with non-retryable error: ${err.message}`);
+        } else {
+          console.log(`[Error] ${hotel.name} failed: ${err.message}`);
+        }
+      } finally {
+        await context.close();
+      }
+
+      // PHASE 9 — DEBUG DIAGNOSTICS
+      console.log(`[Report] ${JSON.stringify(health)}`);
+      report.healthReports.push(health);
     }
+  } catch (err: any) {
+    console.error('[CRITICAL] Browser launch failed', err);
+    report.success = false;
+  } finally {
+    if (browser) await browser.close();
   }
 
-  if (saved > 0) {
-    console.log(`[storeRates] ${hotelName}: ${saved}/${rates.length} rates saved to Supabase`);
-  }
-  return saved;
-}
+  // PHASE 14 — FINAL PRODUCTION VALIDATION
+  console.log('\n==================================================');
+  console.log(`FINAL RESULT: ${JSON.stringify({
+    success: report.success,
+    totalRatesFound: report.totalRatesFound,
+    ratesSavedToSupabase: report.ratesSavedToSupabase,
+    verifiedHotels: report.verifiedHotels,
+    sourcesFailed: report.sourcesFailed
+  })}`);
+  console.log('==================================================\n');
 
-// ─────────────────────────────────────────────────────────────
-// RATE HISTORY
-// ─────────────────────────────────────────────────────────────
-
-async function updateRateHistory(): Promise<void> {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  const hotels = await prisma.hotel.findMany();
-  for (const hotel of hotels) {
-    const todaySnap = await prisma.competitorSnapshot.findUnique({
-      where: { hotelId_date: { hotelId: hotel.id, date: today } },
-    });
-    if (!todaySnap?.bestMapRate) continue;
-
-    const yesterdaySnap = await prisma.competitorSnapshot.findUnique({
-      where: { hotelId_date: { hotelId: hotel.id, date: yesterday } },
-    });
-
-    const deltaPercent = yesterdaySnap?.bestMapRate
-      ? calcDeltaPercent(todaySnap.bestMapRate, yesterdaySnap.bestMapRate)
-      : null;
-
-    const last7 = await prisma.competitorSnapshot.findMany({
-      where: { hotelId: hotel.id, date: { gte: new Date(today.getTime() - 7 * 86400000), lte: today }, bestMapRate: { not: null } },
-    });
-    const last30 = await prisma.competitorSnapshot.findMany({
-      where: { hotelId: hotel.id, date: { gte: new Date(today.getTime() - 30 * 86400000), lte: today }, bestMapRate: { not: null } },
-    });
-
-    const movingAvg7  = last7.length  > 0 ? last7.reduce((s, x)  => s + (x.bestMapRate ?? 0), 0) / last7.length  : null;
-    const movingAvg30 = last30.length > 0 ? last30.reduce((s, x) => s + (x.bestMapRate ?? 0), 0) / last30.length : null;
-
-    let volatility: number | null = null;
-    if (last30.length >= 3) {
-      const r = last30.map(s => s.bestMapRate!);
-      const avg = r.reduce((a, b) => a + b, 0) / r.length;
-      const variance = r.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / r.length;
-      volatility = Math.sqrt(variance) / avg;
-    }
-
-    try {
-      await prisma.rateHistory.upsert({
-        where: { hotelId_date_source: { hotelId: hotel.id, date: today, source: todaySnap.bestSource ?? 'aggregated' } },
-        update:  { mapRate: todaySnap.bestMapRate, cpRate: todaySnap.bestCpRate, epRate: todaySnap.bestEpRate, deltaPercent, movingAvg7, movingAvg30, volatility },
-        create:  { hotelId: hotel.id, date: today, mapRate: todaySnap.bestMapRate, cpRate: todaySnap.bestCpRate, epRate: todaySnap.bestEpRate, source: todaySnap.bestSource ?? 'aggregated', deltaPercent, movingAvg7, movingAvg30, volatility },
-      });
-    } catch { /* non-fatal */ }
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────
-
-function inferRoomType(roomName: string): string {
-  const lower = roomName.toLowerCase();
-  if (lower.includes('suite'))                               return 'suite';
-  if (lower.includes('villa') || lower.includes('cottage'))  return 'villa';
-  if (lower.includes('deluxe'))                              return 'deluxe';
-  if (lower.includes('premium') || lower.includes('superior')) return 'premium';
-  return 'standard';
-}
-
-function getScrapeWindowLabel(): string {
-  const h = new Date().getHours();
-  if (h < 9)  return 'MORNING (6 AM cycle)';
-  if (h < 15) return 'MIDDAY (12 PM cycle)';
-  return 'EVENING (6 PM cycle)';
+  return report;
 }

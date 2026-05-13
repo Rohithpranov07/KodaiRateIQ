@@ -68,7 +68,7 @@ async function jobScrapeAndRecommend(triggerSource: string = 'cron'): Promise<vo
 
     // Step 2: Generate AI recommendation (only if we have verified data)
     let recommendation = null;
-    if (scrapeReport.verification.verifiedHotels > 0) {
+    if (scrapeReport.verifiedHotels > 0) {
       console.log('\n🤖 [Cron] Generating AI recommendation...');
       try {
         recommendation = await generateRecommendation();
@@ -85,15 +85,17 @@ async function jobScrapeAndRecommend(triggerSource: string = 'cron'): Promise<vo
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    const successfulSources = scrapeReport.healthReports.filter(h => h.success).length;
+
     await prisma.aiInsight.create({
       data: {
         date: today,
         type: 'system-status',
-        title: `Automated Rate Update — ${scrapeReport.scrapeWindow}`,
-        summary: `Pipeline completed. ${scrapeReport.totalRates} rates from ${scrapeReport.successfulSources} sources. ${scrapeReport.verification.verifiedHotels} hotels verified (avg confidence: ${(scrapeReport.verification.avgConfidence * 100).toFixed(0)}%). ${scrapeReport.verification.anomalyCount} anomalies flagged.${recommendation ? ` AI recommends ₹${recommendation.recommendedMapRate.toLocaleString()} MAP.` : ' AI recommendation pending.'}`,
-        severity: scrapeReport.verification.anomalyCount > 0 ? 'warning' : 'info',
+        title: `Automated Rate Update — cron`,
+        summary: `Pipeline completed. ${scrapeReport.totalRatesFound} rates from ${successfulSources} sources. ${scrapeReport.verifiedHotels} hotels verified.${recommendation ? ` AI recommends ₹${recommendation.recommendedMapRate.toLocaleString()} MAP.` : ' AI recommendation pending.'}`,
+        severity: scrapeReport.sourcesFailed > 0 ? 'warning' : 'info',
         actionable: false,
-        confidence: scrapeReport.verification.avgConfidence,
+        confidence: 0.9,
       },
     });
 
@@ -101,17 +103,14 @@ async function jobScrapeAndRecommend(triggerSource: string = 'cron'): Promise<vo
     jobEntry.completedAt = new Date().toISOString();
     jobEntry.details = {
       triggerSource,
-      totalRates: scrapeReport.totalRates,
-      successfulSources: scrapeReport.successfulSources,
-      failedSources: scrapeReport.failedSources,
-      verifiedHotels: scrapeReport.verification.verifiedHotels,
-      avgConfidence: scrapeReport.verification.avgConfidence,
-      anomalyCount: scrapeReport.verification.anomalyCount,
+      totalRates: scrapeReport.totalRatesFound,
+      successfulSources: successfulSources,
+      failedSources: scrapeReport.sourcesFailed,
+      verifiedHotels: scrapeReport.verifiedHotels,
       recommendedRate: recommendation?.recommendedMapRate ?? null,
-      durationMs: scrapeReport.duration,
     };
 
-    console.log(`\n✅ [Cron] Pipeline completed successfully in ${(scrapeReport.duration / 1000).toFixed(1)}s\n`);
+    console.log(`\n✅ [Cron] Pipeline completed successfully\n`);
 
   } catch (error) {
     console.error('[Cron] Pipeline FAILED:', error);

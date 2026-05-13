@@ -145,7 +145,7 @@ export const HOTELS_CONFIG = [
     category: 'premium' as const,
     starRating: 5,
     role: 'premium-anchor' as const,
-    website: 'https://www.thecarlton.in',
+    website: 'https://carlton-kodaikanal.com',
   },
   {
     name: 'The Tamara Kodai',
@@ -161,7 +161,7 @@ export const HOTELS_CONFIG = [
     category: 'standard' as const,
     starRating: 3,
     role: 'target' as const,
-    website: 'https://www.hotelkodaiinternational.com',
+    website: 'https://www.kodaiinternational.com',
     isTarget: true,
   },
   {
