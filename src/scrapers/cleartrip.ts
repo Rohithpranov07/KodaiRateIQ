@@ -30,8 +30,7 @@ export class CleartripScraper extends BaseScraper {
 
       const url = `https://www.cleartrip.com/hotels/${slug}/details?checkin=${ci}&checkout=${co}&adults=2&rooms=1`;
 
-      await page.waitForTimeout(1000 + Math.random() * 2000);
-      await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
+      await this.navigate(page, url);
 
       // Dismiss cookie/login prompts
       try {
@@ -99,6 +98,20 @@ export class CleartripScraper extends BaseScraper {
             breakfastIncluded: false, dinnerIncluded: false, lunchIncluded: false,
             freeCancellation: false, hasDiscount: false,
             occupancy: 2, scrapedAt: new Date(), confidence: 0.55,
+          });
+        }
+      }
+      if (rates.length === 0) {
+        const evalPrices = await this.evaluatePrices(page);
+        if (evalPrices.length > 0) {
+          rates.push({
+            hotelName, roomType: 'Best Available',
+            mapRate: null, cpRate: null, epRate: evalPrices[0],
+            taxPercent: 18, taxInclusive: false, totalWithTax: evalPrices[0],
+            source: this.source, sourceUrl: url, isAvailable: true,
+            breakfastIncluded: false, dinnerIncluded: false, lunchIncluded: false,
+            freeCancellation: false, hasDiscount: false,
+            occupancy: 2, scrapedAt: new Date(), confidence: 0.45,
           });
         }
       }

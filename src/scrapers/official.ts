@@ -22,9 +22,13 @@ interface OfficialConfig {
 // Reason codes:
 //   BROKEN_URL  — domain does not resolve or blocks datacenter IPs
 //   UNRELIABLE  — booking engine not publicly accessible
+// All official hotel websites are DNS-blocked / firewalled from Railway datacenter IPs.
 const DISABLED_OFFICIAL: Record<string, string> = {
-  // book.sterlingholidays.com fails DNS on Railway + blocks datacenter IPs
-  'Sterling Kodai Lake': 'BROKEN_URL: book.sterlingholidays.com unreachable from Railway',
+  'Sterling Kodai Lake':       'BROKEN_URL: book.sterlingholidays.com unreachable from Railway',
+  'The Carlton':               'BROKEN_URL: thecarlton.in ERR_NAME_NOT_RESOLVED from Railway',
+  'The Tamara Kodai':          'BROKEN_URL: thetamara.com ERR_NAME_NOT_RESOLVED from Railway',
+  'Hotel Kodai International': 'BROKEN_URL: hotelkodaiinternational.com ERR_NAME_NOT_RESOLVED from Railway',
+  'Le Poshe by Sparsa':        'BROKEN_URL: sparsahotels.com ERR_NAME_NOT_RESOLVED from Railway',
 };
 
 const OFFICIAL_CONFIGS: Record<string, OfficialConfig> = {
@@ -81,8 +85,7 @@ export class OfficialScraper extends BaseScraper {
       const co = this.formatDate(checkOut);
       const url = config.url(ci, co);
 
-      await page.waitForTimeout(1000 + Math.random() * 2000);
-      await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
+      await this.navigate(page, url);
 
       // Try to find room listings
       const roomEls = await page.$$(config.roomSelectors.join(', '));

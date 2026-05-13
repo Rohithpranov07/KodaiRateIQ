@@ -7,7 +7,6 @@ import type { Browser, BrowserContext, Page } from 'playwright';
 import type { ScrapedRate, ScrapeResult, ScraperConfig } from '@/types';
 import { sleep } from '@/lib/utils';
 
-// Network errors worth retrying
 const RETRYABLE_ERRORS = [
   'ERR_NAME_NOT_RESOLVED',
   'ERR_CONNECTION_REFUSED',
@@ -16,13 +15,14 @@ const RETRYABLE_ERRORS = [
   'ERR_HTTP2_PROTOCOL_ERROR',
   'net::ERR',
   'Navigation timeout',
+  'Timeout',           // Playwright throws "Timeout Xms exceeded"
+  'exceeded',          // covers both navigation and waitFor timeouts
   'Target page, context or browser has been closed',
   'browserType.launch',
   'browserContext.newPage',
   'Cannot read properties of null',
 ];
 
-// Errors that indicate the browser process itself crashed — need a full restart
 const BROWSER_FATAL_ERRORS = [
   'Target page, context or browser has been closed',
   'browserType.launch',
@@ -42,9 +42,6 @@ const CHROME_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
 // ── Browser singleton ─────────────────────────────────────────
-// Only the Browser process is shared. Each scraper execution gets
-// its own BrowserContext so that a reset or failure in one scraper
-// never kills pages owned by another concurrent scraper.
 class BrowserManager {
   private static instance: BrowserManager | null = null;
   private browser: Browser | null = null;
@@ -60,7 +57,6 @@ class BrowserManager {
     if (this.launchPromise) return this.launchPromise;
 
     this.launchPromise = (async () => {
-      // Dynamic requires — never evaluated during Next.js build phase
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { chromium } = require('playwright-extra');
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -79,7 +75,6 @@ class BrowserManager {
         ],
       });
 
-      // Auto-clear when Chromium process exits unexpectedly
       browser.on('disconnected', () => {
         this.browser = null;
         this.launchPromise = null;
@@ -93,7 +88,6 @@ class BrowserManager {
     return this.launchPromise;
   }
 
-  // Creates an isolated context — safe to close without affecting other scrapers
   async newContext(): Promise<BrowserContext> {
     const browser = await this.getBrowser();
     const ctx = await browser.newContext({
@@ -104,7 +98,6 @@ class BrowserManager {
       extraHTTPHeaders: { 'accept-language': 'en-IN,en;q=0.9' },
     });
 
-    // Block non-essential resources per context
     await ctx.route('**/*.{png,jpg,jpeg,gif,svg,woff,woff2,ttf,eot,ico}', r => r.abort());
     await ctx.route('**/analytics**', r => r.abort());
     await ctx.route('**/tracking**', r => r.abort());
@@ -115,7 +108,6 @@ class BrowserManager {
     return ctx;
   }
 
-  // Only called when the browser process itself has crashed
   async resetBrowser(): Promise<void> {
     try {
       if (this.browser) await this.browser.close();
@@ -130,7 +122,6 @@ export const browserManager = BrowserManager.getInstance();
 // ── Base scraper ──────────────────────────────────────────────
 export abstract class BaseScraper {
   protected config: ScraperConfig;
-  // Each execute() call owns its own context; never shared across concurrent scrapers
   private _context: BrowserContext | null = null;
 
   constructor(config?: Partial<ScraperConfig>) {
@@ -160,6 +151,49 @@ export abstract class BaseScraper {
     return page;
   }
 
+  // Human-like pre-delay + networkidle navigation with domcontentloaded fallback.
+  // Sites that keep long-polling (e.g. yatra) never reach networkidle → would timeout.
+  // The fallback ensures navigation succeeds even for those sites.
+  protected async navigate(page: Page, url: string): Promise<void> {
+    await page.waitForTimeout(1000 + Math.random() * 2000);
+    try {
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
+    } catch (e: any) {
+      if (e?.message?.includes('Timeout') || e?.message?.includes('exceeded')) {
+        // networkidle timed out — fall back to domcontentloaded + extra render time
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForTimeout(3000);
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  // Universal price scanner: extracts all ₹/INR/Rs amounts from raw page text.
+  // Works regardless of CSS selector changes. Used as ultimate fallback.
+  protected async evaluatePrices(page: Page): Promise<number[]> {
+    try {
+      return await page.evaluate(() => {
+        const text = (document.body?.innerText || '') + ' ' + (document.body?.textContent || '');
+        const found: number[] = [];
+        const patterns = text.match(/(?:₹|INR|Rs\.?)\s*([\d,]+)/g) || [];
+        for (const p of patterns) {
+          const n = parseInt(p.replace(/[^0-9]/g, ''), 10);
+          if (n >= 1500 && n <= 300000) found.push(n);
+        }
+        // Also catch plain numbers in INR range that appear near "per night" context
+        const contextMatches = text.match(/[\d,]{4,7}(?:\s*(?:per night|\/night|nett|net|room))/gi) || [];
+        for (const m of contextMatches) {
+          const n = parseInt(m.replace(/[^0-9]/g, ''), 10);
+          if (n >= 1500 && n <= 300000) found.push(n);
+        }
+        return [...new Set(found)].sort((a, b) => a - b);
+      });
+    } catch {
+      return [];
+    }
+  }
+
   private async closeContext(): Promise<void> {
     if (this._context) {
       try { await this._context.close(); } catch { /* ignore */ }
@@ -172,7 +206,6 @@ export abstract class BaseScraper {
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= this.config.maxRetries; attempt++) {
-      // Fresh isolated context every attempt — closing it never affects other scrapers
       try {
         this._context = await browserManager.newContext();
       } catch (ctxErr) {
@@ -209,11 +242,9 @@ export abstract class BaseScraper {
         if (attempt < this.config.maxRetries) {
           const jitter = Math.random() * 500;
           await sleep(this.config.retryDelay * Math.pow(2, attempt) + jitter);
-          // Only restart the browser process on fatal browser crashes
           if (isBrowserFatal(lastError)) await browserManager.resetBrowser();
         }
       } finally {
-        // Always close our context — never leaks, never affects other scrapers
         await this.closeContext();
       }
     }
