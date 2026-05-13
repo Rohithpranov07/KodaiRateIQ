@@ -2,16 +2,21 @@
 // KodaiRateIQ — Base Scraper Class
 // ============================================================
 
-import { chromium, Browser, BrowserContext, Page } from 'playwright';
+import { chromium } from 'playwright-extra';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const StealthPlugin = require('playwright-extra-plugin-stealth');
+import type { Browser, BrowserContext, Page } from 'playwright';
 import type { ScrapedRate, ScrapeResult, ScraperConfig } from '@/types';
-import { getRandomUserAgent, sleep } from '@/lib/utils';
+import { sleep } from '@/lib/utils';
 
-// DNS / network error patterns that are worth retrying
+chromium.use(StealthPlugin());
+
 const RETRYABLE_ERRORS = [
   'ERR_NAME_NOT_RESOLVED',
   'ERR_CONNECTION_REFUSED',
   'ERR_CONNECTION_TIMED_OUT',
   'ERR_TIMED_OUT',
+  'ERR_HTTP2_PROTOCOL_ERROR',
   'net::ERR',
   'Navigation timeout',
   'Target page, context or browser has been closed',
@@ -22,77 +27,68 @@ function isRetryable(err: Error): boolean {
   return RETRYABLE_ERRORS.some(pat => err.message.includes(pat));
 }
 
-export abstract class BaseScraper {
-  protected config: ScraperConfig;
-  protected browser: Browser | null = null;
-  protected context: BrowserContext | null = null;
+const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-  constructor(config?: Partial<ScraperConfig>) {
-    this.config = {
-      maxRetries: config?.maxRetries ?? 3,
-      retryDelay: config?.retryDelay ?? 2000,
-      timeout: config?.timeout ?? 30000,
-      headless: config?.headless ?? true,
-      userAgents: config?.userAgents ?? [],
-      rateLimit: config?.rateLimit ?? 10,
-    };
+// ── Singleton browser manager ─────────────────────────────────
+class BrowserManager {
+  private static instance: BrowserManager | null = null;
+  private browser: Browser | null = null;
+  private context: BrowserContext | null = null;
+  private initPromise: Promise<void> | null = null;
+
+  static getInstance(): BrowserManager {
+    if (!BrowserManager.instance) {
+      BrowserManager.instance = new BrowserManager();
+    }
+    return BrowserManager.instance;
   }
 
-  abstract get source(): string;
-  abstract scrapeHotel(hotelName: string, checkIn: Date, checkOut: Date): Promise<ScrapedRate[]>;
-
-  /**
-   * Launch Playwright's bundled Chromium with minimal stable args.
-   *
-   *  chromiumSandbox: false  → disables sandbox (required in any unprivileged
-   *                            container; equivalent to --no-sandbox internally)
-   *  --disable-dev-shm-usage → /dev/shm is too small in Railway (64 MB default)
-   *  --disable-gpu           → no GPU available in Railway
-   *
-   * REMOVED (caused SIGTRAP / crashpad crash in Railway):
-   *  --single-process, --no-zygote, --no-sandbox (covered by chromiumSandbox),
-   *  --disable-setuid-sandbox, --disable-background-networking,
-   *  --disable-extensions, executablePath / CHROMIUM_PATH
-   */
-  protected async launchBrowser(): Promise<void> {
+  async init(): Promise<void> {
     if (this.browser) return;
+    if (this.initPromise) return this.initPromise;
 
-    this.browser = await chromium.launch({
-      headless: true,
-      chromiumSandbox: false,
-      args: [
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-      ],
-    });
+    this.initPromise = (async () => {
+      this.browser = await chromium.launch({
+        headless: true,
+        chromiumSandbox: false,
+        args: [
+          '--no-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--disable-http2',
+          '--disable-blink-features=AutomationControlled',
+        ],
+      });
 
-    const userAgent = getRandomUserAgent();
-    this.context = await this.browser.newContext({
-      userAgent,
-      viewport: { width: 1920, height: 1080 },
-      locale: 'en-IN',
-      timezoneId: 'Asia/Kolkata',
-    });
+      this.context = await this.browser.newContext({
+        userAgent: CHROME_UA,
+        viewport: { width: 1366, height: 768 },
+        locale: 'en-IN',
+        timezoneId: 'Asia/Kolkata',
+        extraHTTPHeaders: {
+          'accept-language': 'en-IN,en;q=0.9',
+        },
+      });
 
-    // Block non-essential resources — cuts bandwidth and speeds scraping
-    await this.context.route('**/*.{png,jpg,jpeg,gif,svg,woff,woff2,ttf,eot,ico}', r => r.abort());
-    await this.context.route('**/analytics**', r => r.abort());
-    await this.context.route('**/tracking**', r => r.abort());
-    await this.context.route('**/ads/**', r => r.abort());
-    await this.context.route('**/gtm.js**', r => r.abort());
-    await this.context.route('**/fbevents**', r => r.abort());
+      await this.context.route('**/*.{png,jpg,jpeg,gif,svg,woff,woff2,ttf,eot,ico}', r => r.abort());
+      await this.context.route('**/analytics**', r => r.abort());
+      await this.context.route('**/tracking**', r => r.abort());
+      await this.context.route('**/ads/**', r => r.abort());
+      await this.context.route('**/gtm.js**', r => r.abort());
+      await this.context.route('**/fbevents**', r => r.abort());
+    })();
+
+    await this.initPromise;
+    this.initPromise = null;
   }
 
-  protected async newPage(): Promise<Page> {
-    if (!this.context) await this.launchBrowser();
+  async getPage(): Promise<Page> {
+    await this.init();
 
     const page = await this.context!.newPage();
-
-    // Explicit timeout setters — applied on EVERY page
     page.setDefaultTimeout(30000);
-    page.setDefaultNavigationTimeout(45000);
+    page.setDefaultNavigationTimeout(60000);
 
-    // Anti-detection fingerprint suppression
     await page.addInitScript(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => false });
       Object.defineProperty(navigator, 'plugins',   { get: () => [1, 2, 3, 4, 5] });
@@ -102,17 +98,44 @@ export abstract class BaseScraper {
     return page;
   }
 
-  /**
-   * Execute scraping with retry logic.
-   * Only retries on DNS/network errors — not on selector or logic failures.
-   */
+  async reset(): Promise<void> {
+    try {
+      if (this.context) { await this.context.close(); this.context = null; }
+      if (this.browser)  { await this.browser.close();  this.browser  = null; }
+    } catch { /* ignore */ }
+    this.initPromise = null;
+  }
+}
+
+export const browserManager = BrowserManager.getInstance();
+
+export abstract class BaseScraper {
+  protected config: ScraperConfig;
+
+  constructor(config?: Partial<ScraperConfig>) {
+    this.config = {
+      maxRetries: config?.maxRetries ?? 3,
+      retryDelay: config?.retryDelay ?? 2000,
+      timeout: config?.timeout ?? 60000,
+      headless: config?.headless ?? true,
+      userAgents: config?.userAgents ?? [],
+      rateLimit: config?.rateLimit ?? 10,
+    };
+  }
+
+  abstract get source(): string;
+  abstract scrapeHotel(hotelName: string, checkIn: Date, checkOut: Date): Promise<ScrapedRate[]>;
+
+  protected async newPage(): Promise<Page> {
+    return browserManager.getPage();
+  }
+
   async execute(hotelName: string, checkIn: Date, checkOut: Date): Promise<ScrapeResult> {
     const startTime = Date.now();
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= this.config.maxRetries; attempt++) {
       try {
-        await this.launchBrowser();
         const rates = await this.scrapeHotel(hotelName, checkIn, checkOut);
         return {
           success: true,
@@ -130,14 +153,12 @@ export abstract class BaseScraper {
           (retryable ? ' (retryable)' : ' (not retryable — stopping)')
         );
 
-        if (!retryable) break; // selector / logic bugs — don't waste retries
+        if (!retryable) break;
 
         if (attempt < this.config.maxRetries) {
-          // Exponential backoff with ±500ms jitter
           const jitter = Math.random() * 500;
           await sleep(this.config.retryDelay * Math.pow(2, attempt) + jitter);
-          // Reset browser on network failures so we get a clean socket
-          await this.cleanup();
+          await browserManager.reset();
         }
       }
     }
@@ -154,12 +175,7 @@ export abstract class BaseScraper {
   }
 
   async cleanup(): Promise<void> {
-    try {
-      if (this.context) { await this.context.close(); this.context = null; }
-      if (this.browser)  { await this.browser.close();  this.browser  = null; }
-    } catch (e) {
-      console.error('[BaseScraper] Cleanup error:', e);
-    }
+    // Cleanup is managed by the singleton; individual scrapers don't own the browser
   }
 
   protected extractPrice(text: string): number | null {

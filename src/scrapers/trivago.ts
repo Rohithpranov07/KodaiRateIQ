@@ -5,7 +5,6 @@
 import { BaseScraper } from './base';
 import { classifyMealPlan, normalizeTaxInclusive } from '@/engine/map-classifier';
 import type { ScrapedRate } from '@/types';
-import { sleep } from '@/lib/utils';
 
 const TRIVAGO_IDS: Record<string, string> = {
   'The Carlton':               '56781234',
@@ -31,8 +30,8 @@ export class TrivagoScraper extends BaseScraper {
 
       const url = `https://www.trivago.in/en-IN/odr?iPathId=${id}&iGeoDistanceLimit=50000&aPriceAttributeCodes%5B%5D=7&a3COSL=0&aDPRoomType%5B%5D=7&iRoomType=7&aDateRange%5Bstart%5D=${ci}&aDateRange%5Bend%5D=${co}&iRoomAmount=1&iPersonAmountAdults=2`;
 
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: this.config.timeout });
-      await sleep(5000);
+      await page.waitForTimeout(1000 + Math.random() * 2000);
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
 
       // Trivago shows aggregated partner prices
       const dealCards = await page.$$('[data-qa="itemlist-element"], [class*="itemlist-element"]');

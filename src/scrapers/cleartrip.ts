@@ -5,7 +5,6 @@
 import { BaseScraper } from './base';
 import { classifyMealPlan, normalizeTaxInclusive } from '@/engine/map-classifier';
 import type { ScrapedRate } from '@/types';
-import { sleep } from '@/lib/utils';
 
 const CLEARTRIP_IDS: Record<string, string> = {
   'The Carlton':               'the-carlton-kodaikanal',
@@ -31,8 +30,8 @@ export class CleartripScraper extends BaseScraper {
 
       const url = `https://www.cleartrip.com/hotels/${slug}/details?checkin=${ci}&checkout=${co}&adults=2&rooms=1`;
 
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: this.config.timeout });
-      await sleep(4000);
+      await page.waitForTimeout(1000 + Math.random() * 2000);
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
 
       // Dismiss cookie/login prompts
       try {

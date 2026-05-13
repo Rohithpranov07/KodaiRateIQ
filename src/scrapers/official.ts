@@ -8,7 +8,6 @@
 import { BaseScraper } from './base';
 import { classifyMealPlan, normalizeTaxInclusive } from '@/engine/map-classifier';
 import type { ScrapedRate } from '@/types';
-import { sleep } from '@/lib/utils';
 
 // ── Hotel-specific booking engine configs ────────────────────
 interface OfficialConfig {
@@ -82,10 +81,8 @@ export class OfficialScraper extends BaseScraper {
       const co = this.formatDate(checkOut);
       const url = config.url(ci, co);
 
-      // 'networkidle' hangs on hotel booking engines that keep long-polling.
-      // 'domcontentloaded' fires as soon as DOM is ready — sufficient for prices.
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: this.config.timeout });
-      await sleep(4000);
+      await page.waitForTimeout(1000 + Math.random() * 2000);
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
 
       // Try to find room listings
       const roomEls = await page.$$(config.roomSelectors.join(', '));

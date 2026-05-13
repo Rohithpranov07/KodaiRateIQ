@@ -2,11 +2,9 @@
 // KodaiRateIQ — Booking.com Scraper (v2 — MAP Classifier)
 // ============================================================
 
-import { Page } from 'playwright';
 import { BaseScraper } from './base';
 import { classifyMealPlan, normalizeTaxInclusive } from '@/engine/map-classifier';
 import type { ScrapedRate } from '@/types';
-import { sleep } from '@/lib/utils';
 
 const BOOKING_SLUGS: Record<string, string> = {
   'The Carlton':               'hotel/in/the-carlton-kodaikanal.en-gb',
@@ -34,15 +32,15 @@ export class BookingScraper extends BaseScraper {
       const co = this.formatDate(checkOut);
       const url = `https://www.booking.com/${slug}?checkin=${ci}&checkout=${co}&group_adults=2&no_rooms=1&group_children=0`;
 
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: this.config.timeout });
-      await sleep(3000);
+      await page.waitForTimeout(1000 + Math.random() * 2000);
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
 
       // Cookie consent
       try {
         const cookieBtn = page.locator('[id="onetrust-accept-btn-handler"]');
         if (await cookieBtn.isVisible({ timeout: 2000 })) {
           await cookieBtn.click();
-          await sleep(1000);
+          await page.waitForTimeout(1000);
         }
       } catch { /* no cookie banner */ }
 

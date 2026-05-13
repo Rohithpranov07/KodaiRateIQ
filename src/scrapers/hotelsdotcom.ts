@@ -5,7 +5,6 @@
 import { BaseScraper } from './base';
 import { classifyMealPlan, normalizeTaxInclusive } from '@/engine/map-classifier';
 import type { ScrapedRate } from '@/types';
-import { sleep } from '@/lib/utils';
 
 // Hotels.com uses same Expedia property IDs under the hood
 const HOTELSDOTCOM_IDS: Record<string, string> = {
@@ -32,8 +31,8 @@ export class HotelsDotComScraper extends BaseScraper {
 
       const url = `https://www.hotels.com/ho${propertyId}?chkin=${ci}&chkout=${co}&rm1=a2&x_pwa=1`;
 
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: this.config.timeout });
-      await sleep(4500);
+      await page.waitForTimeout(1000 + Math.random() * 2000);
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
 
       try {
         const closeBtn = page.locator('[data-stid="modal-close"], [aria-label="Close"]').first();

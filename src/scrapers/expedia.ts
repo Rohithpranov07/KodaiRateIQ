@@ -5,7 +5,6 @@
 import { BaseScraper } from './base';
 import { classifyMealPlan, normalizeTaxInclusive } from '@/engine/map-classifier';
 import type { ScrapedRate } from '@/types';
-import { sleep } from '@/lib/utils';
 
 const EXPEDIA_IDS: Record<string, string> = {
   'The Carlton':           'the-carlton-hotel-kodaikanal',
@@ -43,8 +42,8 @@ export class ExpediaScraper extends BaseScraper {
         ? `https://www.expedia.co.in/h${propertyId}.Hotel-Information?chkin=${ci}&chkout=${co}&rm1=a2`
         : `https://www.expedia.co.in/hotels/${slug}?chkin=${ci}&chkout=${co}&rm1=a2`;
 
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: this.config.timeout });
-      await sleep(4000);
+      await page.waitForTimeout(1000 + Math.random() * 2000);
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
 
       // Dismiss popups
       try {

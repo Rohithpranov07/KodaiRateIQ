@@ -5,7 +5,6 @@
 import { BaseScraper } from './base';
 import { classifyMealPlan, normalizeTaxInclusive } from '@/engine/map-classifier';
 import type { ScrapedRate } from '@/types';
-import { sleep } from '@/lib/utils';
 
 const AGODA_SLUGS: Record<string, string> = {
   'The Carlton':               'the-carlton-kodaikanal',
@@ -33,15 +32,15 @@ export class AgodaScraper extends BaseScraper {
       const co = this.formatDate(checkOut);
       const url = `https://www.agoda.com/en-in/${slug}/hotel/kodaikanal-india.html?checkIn=${ci}&checkOut=${co}&rooms=1&adults=2&children=0`;
 
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: this.config.timeout });
-      await sleep(5000);
+      await page.waitForTimeout(1000 + Math.random() * 2000);
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
 
       // Cookie consent
       try {
         const cookieBtn = page.locator('[data-selenium="cookie-consent-accept-btn"], #consent-btn');
         if (await cookieBtn.isVisible({ timeout: 3000 })) {
           await cookieBtn.click();
-          await sleep(1000);
+          await page.waitForTimeout(1000);
         }
       } catch { /* no cookie banner */ }
 
