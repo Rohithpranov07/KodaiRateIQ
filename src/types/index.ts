@@ -45,6 +45,24 @@ export interface ScrapedRate {
   confidence: number;
 }
 
+export interface ScraperDiagnostics {
+  source: string;
+  hotelName: string;
+  url: string;
+  finalUrl: string;
+  pageTitle: string;
+  htmlSize: number;
+  bodyTextLength: number;
+  hasPriceSymbol: boolean;
+  botBlocked: boolean;
+  blockReason: string | null;
+  sampleBodyText: string;
+  samplePrices: string[];
+  navigationMs: number;
+  ratesExtracted: number;
+  screenshotPath: string | null;
+}
+
 // Scraper result
 export interface ScrapeResult {
   success: boolean;
@@ -54,6 +72,7 @@ export interface ScrapeResult {
   duration: number;
   error?: string;
   retryCount: number;
+  diagnostics?: ScraperDiagnostics;
 }
 
 // Recommendation output

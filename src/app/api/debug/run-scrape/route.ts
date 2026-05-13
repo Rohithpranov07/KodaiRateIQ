@@ -220,6 +220,21 @@ export async function GET(request: Request) {
 
     recommendationsGenerated: recommendation ? 1 : 0,
 
+    // ── Per-source diagnostics: tells you exactly why each OTA returned 0 rates ──
+    sourceDiagnostics: scrapeReport.sourceDiagnostics ?? [],
+    blockSummary: scrapeReport.blockSummary ?? {},
+    diagnosticSummary: {
+      totalNavigations: (scrapeReport.sourceDiagnostics ?? []).length,
+      botBlockedCount:  (scrapeReport.sourceDiagnostics ?? []).filter(d => d.botBlocked).length,
+      pagesWithPrices:  (scrapeReport.sourceDiagnostics ?? []).filter(d => d.hasPriceSymbol).length,
+      avgHtmlSize: (scrapeReport.sourceDiagnostics ?? []).length > 0
+        ? Math.round(
+            (scrapeReport.sourceDiagnostics ?? []).reduce((s, d) => s + d.htmlSize, 0) /
+            (scrapeReport.sourceDiagnostics ?? []).length
+          )
+        : 0,
+    },
+
     logs,
   });
 }

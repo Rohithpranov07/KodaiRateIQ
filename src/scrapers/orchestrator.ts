@@ -37,6 +37,22 @@ const MAX_CONCURRENT_BROWSERS = 2;
 
 // ── Scrape Report ─────────────────────────────────────────────
 
+export interface SourceDiagnosticSummary {
+  source: string;
+  hotelName: string;
+  pageTitle: string;
+  htmlSize: number;
+  bodyTextLength: number;
+  hasPriceSymbol: boolean;
+  botBlocked: boolean;
+  blockReason: string | null;
+  samplePrices: string[];
+  sampleBodyText: string;
+  navigationMs: number;
+  ratesExtracted: number;
+  screenshotPath: string | null;
+}
+
 export interface ScrapeReport {
   totalRates: number;
   mapRates: number;
@@ -61,6 +77,8 @@ export interface ScrapeReport {
     snapshots: number;
     otaAudits: number;
   };
+  sourceDiagnostics: SourceDiagnosticSummary[];
+  blockSummary: Record<string, string>;
 }
 
 // ── Scraper tiers ─────────────────────────────────────────────
@@ -203,6 +221,38 @@ export async function runFullScrape(): Promise<ScrapeReport> {
   console.log(`Duration            : ${(duration / 1000).toFixed(1)}s`);
   console.log(`${'='.repeat(60)}\n`);
 
+  // Build per-source diagnostics from result objects
+  const sourceDiagnostics: SourceDiagnosticSummary[] = allResults
+    .filter(r => r.diagnostics)
+    .map(r => {
+      const d = r.diagnostics!;
+      return {
+        source: d.source,
+        hotelName: d.hotelName,
+        pageTitle: d.pageTitle,
+        htmlSize: d.htmlSize,
+        bodyTextLength: d.bodyTextLength,
+        hasPriceSymbol: d.hasPriceSymbol,
+        botBlocked: d.botBlocked,
+        blockReason: d.blockReason,
+        samplePrices: d.samplePrices,
+        sampleBodyText: d.sampleBodyText,
+        navigationMs: d.navigationMs,
+        ratesExtracted: d.ratesExtracted,
+        screenshotPath: d.screenshotPath,
+      };
+    });
+
+  const blockSummary: Record<string, string> = {};
+  for (const d of sourceDiagnostics) {
+    if (d.botBlocked) blockSummary[`${d.source}/${d.hotelName}`] = d.blockReason ?? 'unknown';
+  }
+
+  const blockedCount = Object.keys(blockSummary).length;
+  if (blockedCount > 0) {
+    console.log(`[Orchestrator] Bot-blocked navigations: ${blockedCount}`);
+  }
+
   return {
     totalRates,
     mapRates,
@@ -223,6 +273,8 @@ export async function runFullScrape(): Promise<ScrapeReport> {
       snapshots: snapshotsWritten,
       otaAudits: auditsWritten,
     },
+    sourceDiagnostics,
+    blockSummary,
   };
 }
 
