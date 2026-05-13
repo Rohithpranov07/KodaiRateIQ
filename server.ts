@@ -1,30 +1,48 @@
+// ============================================================
+// PRODUCTION GUARD — must be the very first lines.
+// Railway may not inject NODE_ENV=production automatically.
+// Forcing it here ensures Next.js and all libraries (Prisma,
+// node-cron, etc.) run in production mode regardless of the
+// host environment configuration.
+// ============================================================
+if (process.env.NODE_ENV !== 'development') {
+  // Force production mode — Railway may not inject NODE_ENV=production.
+  // Cast needed because @types/node marks NODE_ENV as readonly.
+  (process.env as Record<string, string>).NODE_ENV = 'production';
+}
+
 import { createServer } from 'http';
 import { parse } from 'url';
+import path from 'path';
 import next from 'next';
 import { initCronJobs } from './src/cron/scheduler';
 
 // ── Config ────────────────────────────────────────────────────
 // Railway injects PORT at runtime (typically 8080).
-// Default to 3000 for local dev.
-const dev  = process.env.NODE_ENV !== 'production';
-const port = parseInt(process.env.PORT ?? '3000', 10);
-// Always bind to all interfaces — required in Docker / Railway
-const hostname = '0.0.0.0';
+const port     = parseInt(process.env.PORT ?? '3000', 10);
+const hostname = '0.0.0.0';           // always bind all interfaces in Docker
+const dir      = path.resolve('.');    // project root = WORKDIR (/app)
 
-// ── Startup log ───────────────────────────────────────────────
+// In the compiled dist/server.js, dev is ALWAYS false.
+// This file is only built for production. Dev mode uses tsx server.ts directly.
+const dev = false;
+
+// ── Startup banner ────────────────────────────────────────────
 console.log('================================================');
 console.log(' KodaiRateIQ — starting');
-console.log(` NODE_ENV : ${process.env.NODE_ENV ?? 'development'}`);
+console.log(` NODE_ENV : ${process.env.NODE_ENV}`);
 console.log(` PORT     : ${port}`);
+console.log(` HOSTNAME : ${hostname}`);
+console.log(` DIR      : ${dir}`);
 console.log(` DB       : ${process.env.DATABASE_URL ? 'configured' : 'MISSING — check env vars'}`);
 console.log('================================================');
 
 if (!process.env.DATABASE_URL) {
-  console.error('[FATAL] DATABASE_URL is not set. Server will start but DB calls will fail.');
+  console.error('[WARN] DATABASE_URL is not set. DB calls will fail until set.');
 }
 
 // ── Boot Next.js ──────────────────────────────────────────────
-const app    = next({ dev, hostname, port });
+const app    = next({ dev, hostname, port, dir });
 const handle = app.getRequestHandler();
 
 app.prepare()
@@ -34,55 +52,64 @@ app.prepare()
         const parsedUrl = parse(req.url!, true);
         await handle(req, res, parsedUrl);
       } catch (err) {
-        console.error('[Server] Unhandled error for', req.url, err);
+        console.error('[Server] Unhandled request error for', req.url, err);
         res.statusCode = 500;
         res.end('internal server error');
       }
     });
 
-    server.once('error', (err) => {
-      console.error('[Server] Fatal startup error:', err);
+    server.once('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`[Server] Port ${port} is already in use`);
+      } else {
+        console.error('[Server] Fatal startup error:', err);
+      }
       process.exit(1);
     });
 
     server.listen(port, hostname, () => {
-      console.log(`[Server] Ready → http://${hostname}:${port}`);
-      console.log(`[Server] Public URL: ${process.env.NEXT_PUBLIC_APP_URL ?? '(not set)'}`);
+      console.log(`[Server] ✓ Ready → http://${hostname}:${port}`);
+      console.log(`[Server] Public URL: ${process.env.NEXT_PUBLIC_APP_URL ?? '(NEXT_PUBLIC_APP_URL not set)'}`);
 
-      // ── Verify DB connectivity ──────────────────────────────
-      import('./src/lib/db').then(({ default: prisma }) => {
-        prisma.$queryRaw`SELECT 1`
-          .then(() => console.log('[DB] Supabase connection verified ✓'))
-          .catch((e: Error) => console.error('[DB] Connection failed:', e.message));
-      });
+      // ── Supabase connectivity check ─────────────────────────
+      import('./src/lib/db')
+        .then(({ default: prisma }) =>
+          (prisma as any).$queryRaw`SELECT 1`
+            .then(() => console.log('[DB] ✓ Supabase connected'))
+            .catch((e: Error) => console.error('[DB] ✗ Connection failed:', e.message))
+        )
+        .catch((e: Error) => console.error('[DB] ✗ Failed to load db module:', e.message));
 
-      // ── Start cron scheduler ────────────────────────────────
-      if (process.env.NODE_ENV === 'production') {
-        try {
-          console.log('[Cron] Initialising node-cron scheduler...');
-          initCronJobs();
-          console.log('[Cron] Scheduler active ✓');
-        } catch (e) {
-          console.error('[Cron] Scheduler boot failed (non-fatal):', e);
-        }
-      } else {
-        console.log('[Cron] Skipped in development mode');
+      // ── Cron scheduler ──────────────────────────────────────
+      try {
+        console.log('[Cron] Initialising scraping scheduler...');
+        initCronJobs();
+        console.log('[Cron] ✓ Scheduler active (6am / 12pm / 6pm IST)');
+      } catch (e) {
+        // Non-fatal — web server still runs if cron fails
+        console.error('[Cron] ✗ Scheduler boot failed (non-fatal):', e);
       }
     });
   })
-  .catch((err) => {
-    console.error('[Server] app.prepare() failed:', err);
+  .catch((err: Error) => {
+    console.error('[Server] ✗ app.prepare() failed:', err.message);
+    console.error(err.stack);
     process.exit(1);
   });
 
 // ── Global safety nets ────────────────────────────────────────
-process.on('unhandledRejection', (reason) => {
+process.on('unhandledRejection', (reason: unknown) => {
+  // Log but don't crash — keeps the server alive for transient failures
   console.error('[Process] Unhandled promise rejection:', reason);
-  // Do NOT exit — keep the server alive
 });
 
-process.on('uncaughtException', (err) => {
-  console.error('[Process] Uncaught exception:', err);
-  // Exit on truly fatal errors so Railway restarts cleanly
+process.on('uncaughtException', (err: Error) => {
+  console.error('[Process] Uncaught exception:', err.message);
+  console.error(err.stack);
   process.exit(1);
+});
+
+process.on('SIGTERM', () => {
+  console.log('[Process] SIGTERM received — shutting down gracefully');
+  process.exit(0);
 });

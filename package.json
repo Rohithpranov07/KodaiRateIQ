@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "next build",
-    "build:server": "esbuild server.ts --bundle --platform=node --target=node20 --format=cjs --packages=external --outfile=dist/server.js",
+    "build:server": "esbuild server.ts --bundle --platform=node --target=node20 --format=cjs --packages=external --define:__DEV__=false --outfile=dist/server.js",
     "start": "NODE_ENV=production node dist/server.js",
     "lint": "eslint",
     "db:generate": "npx prisma generate",
