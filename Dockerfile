@@ -1,53 +1,85 @@
 # ============================================================
 # KodaiRateIQ — Production Dockerfile (Railway)
 #
-# Base: node:20-bookworm-slim (Debian, glibc, OpenSSL 3.x)
-# NOT Alpine — Alpine uses musl libc which is incompatible with
-# Prisma's linux-musl engine on Railway's OpenSSL 1.1 runtime.
-# Debian bookworm ships OpenSSL 3.x and glibc, fully compatible.
+# Base: node:20-bookworm-slim (Debian glibc + OpenSSL 3.x)
 #
-# Multi-stage build:
-#   base    → Debian slim + Playwright (Chromium) system deps
-#   deps    → npm ci + prisma generate (generates linux-x64 engine)
+# Chromium strategy: Playwright BUNDLED browser (NOT system apt pkg)
+#   - apt chromium caused crashpad / SIGTRAP in Railway containers
+#   - Playwright's own Chromium is matched exactly to the installed
+#     playwright version, avoiding ABI mismatches
+#   - System deps for Playwright installed manually via apt
+#   - Browser downloaded once in `deps` stage, copied to `runner`
+#
+# Stages:
+#   base    → Debian slim + all Playwright system-level OS deps
+#   deps    → npm ci + prisma generate + playwright install chromium
 #   builder → next build + esbuild server.ts → dist/server.js
-#   runner  → lean production image
-#
-# PORT is injected by Railway at runtime (typically 8080).
-# NODE_ENV is forced to production in CMD + server.ts.
+#   runner  → minimal production image
 # ============================================================
 
 # ── Base: Node 20 Debian bookworm-slim ───────────────────────
 FROM node:20-bookworm-slim AS base
 
-# Install Chromium + runtime dependencies via apt.
-# Debian bookworm's chromium package pulls all required libs
-# (libnss3, libgbm1, libatk, libxcomposite, etc.) automatically.
+# Playwright Chromium requires these system libraries.
+# Listed explicitly to avoid pulling unnecessary packages.
+# Source: https://playwright.dev/docs/browsers#install-system-dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    chromium \
-    fonts-freefont-ttf \
+    # Core system libs
     ca-certificates \
+    wget \
+    # NSS / NSPR (TLS, crypto)
+    libnss3 \
+    libnspr4 \
+    # DBus
+    libdbus-1-3 \
+    # ATK accessibility
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libatspi2.0-0 \
+    # CUPS printing
+    libcups2 \
+    # DRM / graphics
+    libdrm2 \
+    libgbm1 \
+    # X11 compositing
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxkbcommon0 \
+    libxrandr2 \
+    # Fonts & rendering
+    libpango-1.0-0 \
+    libcairo2 \
+    fonts-freefont-ttf \
+    # Sound (needed by Chromium even headless)
+    libasound2 \
+    # GLib
+    libglib2.0-0 \
  && rm -rf /var/lib/apt/lists/*
 
-# Point Playwright to the system Chromium (no browser download).
-# Debian bookworm chromium binary is at /usr/bin/chromium
-ENV PLAYWRIGHT_BROWSERS_PATH=/usr/lib
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-ENV CHROMIUM_PATH=/usr/bin/chromium
+# Playwright downloads browsers here (shared across all stages)
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# ── Deps: install node_modules + generate Prisma client ──────
-# Running inside node:20-bookworm-slim ensures prisma generate
-# produces linux-x64-openssl-3.0.x engine, NOT linux-musl.
+# ── Deps: npm install + prisma generate + playwright browser ─
 FROM base AS deps
 WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
 
+# Install all node_modules (including devDeps — esbuild/tsx live there)
 RUN npm ci
+
+# Generate Prisma client — produces debian-openssl-3.0.x engine
 RUN npx prisma generate
 
-# ── Builder: compile Next.js + bundle server.ts ───────────────
+# Download Playwright's bundled Chromium to PLAYWRIGHT_BROWSERS_PATH
+# This is the version-matched browser for the installed playwright package.
+# Do NOT use system Chromium — it caused SIGTRAP crashes on Railway.
+RUN npx playwright install chromium
+
+# ── Builder: compile Next.js + bundle server.ts ──────────────
 FROM base AS builder
 WORKDIR /app
 
@@ -57,11 +89,7 @@ COPY . .
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# 1. Build Next.js app (pages + API routes → .next/)
 RUN npm run build
-
-# 2. Bundle server.ts + src/** → dist/server.js (plain CJS)
-#    --packages=external: next/prisma/playwright stay as require()
 RUN npm run build:server
 
 # ── Runner: lean production image ────────────────────────────
@@ -71,30 +99,32 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
-# PORT intentionally unset — Railway injects it at container start
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+# PORT intentionally unset — Railway injects it at runtime
 
 RUN addgroup --system --gid 1001 nodejs \
- && adduser --system --uid 1001 nextjs
+ && adduser  --system --uid 1001 nextjs
 
 # Runtime node_modules (next, @prisma/client, playwright, node-cron)
-COPY --from=deps    --chown=nextjs:nodejs /app/node_modules         ./node_modules
+COPY --from=deps    --chown=nextjs:nodejs /app/node_modules      ./node_modules
 
-# Compiled Next.js output (all API routes, pages, assets)
-COPY --from=builder --chown=nextjs:nodejs /app/.next                ./.next
-COPY --from=builder --chown=nextjs:nodejs /app/public               ./public
+# Playwright bundled Chromium browser (downloaded in deps stage)
+COPY --from=deps    --chown=nextjs:nodejs /ms-playwright         /ms-playwright
 
-# Prisma schema + generated client (linux-x64-openssl-3.0.x engine)
-COPY --from=builder --chown=nextjs:nodejs /app/prisma               ./prisma
+# Compiled Next.js output
+COPY --from=builder --chown=nextjs:nodejs /app/.next             ./.next
+COPY --from=builder --chown=nextjs:nodejs /app/public            ./public
 
-# Compiled server entry point (150kb CJS bundle, no tsx needed)
-COPY --from=builder --chown=nextjs:nodejs /app/dist                 ./dist
+# Prisma schema + generated client
+COPY --from=builder --chown=nextjs:nodejs /app/prisma            ./prisma
+
+# Compiled server bundle (plain CJS, no tsx needed at runtime)
+COPY --from=builder --chown=nextjs:nodejs /app/dist              ./dist
 
 # Project root markers
-COPY --from=builder --chown=nextjs:nodejs /app/package.json         ./package.json
-COPY --from=builder --chown=nextjs:nodejs /app/next.config.ts       ./next.config.ts
+COPY --from=builder --chown=nextjs:nodejs /app/package.json      ./package.json
+COPY --from=builder --chown=nextjs:nodejs /app/next.config.ts    ./next.config.ts
 
 USER nextjs
 
-# Force NODE_ENV=production at process start — overrides any value
-# Railway may have injected. dist/server.js also sets it internally.
 CMD ["sh", "-c", "NODE_ENV=production node dist/server.js"]
