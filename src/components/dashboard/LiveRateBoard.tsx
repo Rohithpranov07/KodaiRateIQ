@@ -324,9 +324,25 @@ export function LiveRateBoard({ rates, loading }: LiveRateBoardProps) {
       )}
 
       {data.length === 0 && (
-        <div className="px-6 py-12 text-center text-[#5a5a6e]">
-          <p className="text-sm">No rate data available.</p>
-          <p className="text-xs mt-1 opacity-60">Trigger a scrape cycle to populate BAR data from all OTA sources.</p>
+        <div className="px-6 py-14 flex flex-col items-center gap-4 text-center">
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
+            style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="1.8">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-semibold" style={{ color: '#f59e0b' }}>No rates collected yet</p>
+            <p className="text-xs mt-1 max-w-xs" style={{ color: 'var(--color-warm-slate)', opacity: 0.7 }}>
+              Scrape pending — the automated pipeline runs at 6 AM, 12 PM, and 6 PM IST.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest"
+            style={{ background: 'rgba(245,158,11,0.08)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.15)' }}>
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" style={{ animation: 'pulse 1.5s infinite' }} />
+            Awaiting first scrape cycle
+          </div>
         </div>
       )}
     </section>

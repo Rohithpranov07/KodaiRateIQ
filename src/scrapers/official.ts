@@ -19,6 +19,15 @@ interface OfficialConfig {
   taxInclusive: boolean;
 }
 
+// DISABLED official configs are excluded from scraping entirely.
+// Reason codes:
+//   BROKEN_URL  — domain does not resolve or blocks datacenter IPs
+//   UNRELIABLE  — booking engine not publicly accessible
+const DISABLED_OFFICIAL: Record<string, string> = {
+  // book.sterlingholidays.com fails DNS on Railway + blocks datacenter IPs
+  'Sterling Kodai Lake': 'BROKEN_URL: book.sterlingholidays.com unreachable from Railway',
+};
+
 const OFFICIAL_CONFIGS: Record<string, OfficialConfig> = {
   'The Carlton': {
     url: (ci, co) => `https://www.thecarlton.in/tariff/?checkin=${ci}&checkout=${co}&adults=2&children=0&rooms=1`,
@@ -41,13 +50,7 @@ const OFFICIAL_CONFIGS: Record<string, OfficialConfig> = {
     inclSelectors: ['[class*="meal"], [class*="plan"], [class*="include"]'],
     taxInclusive: false,
   },
-  'Sterling Kodai Lake': {
-    url: (ci, co) => `https://book.sterlingholidays.com/propertyDetail?property=KL&checkin=${ci}&checkout=${co}&adults=2`,
-    priceSelectors: ['[class*="price"], [class*="amount"]'],
-    roomSelectors: ['[class*="room-type"], [class*="roomType"]'],
-    inclSelectors: ['[class*="meal"], [class*="plan"]'],
-    taxInclusive: false,
-  },
+  // 'Sterling Kodai Lake' deliberately omitted — see DISABLED_OFFICIAL
   'Le Poshe by Sparsa': {
     url: (ci, co) => `https://www.sparsahotels.com/le-poshe/rooms/?checkin=${ci}&checkout=${co}&adults=2`,
     priceSelectors: ['[class*="price"], [class*="rate"]'],
@@ -79,7 +82,9 @@ export class OfficialScraper extends BaseScraper {
       const co = this.formatDate(checkOut);
       const url = config.url(ci, co);
 
-      await page.goto(url, { waitUntil: 'networkidle', timeout: this.config.timeout });
+      // 'networkidle' hangs on hotel booking engines that keep long-polling.
+      // 'domcontentloaded' fires as soon as DOM is ready — sufficient for prices.
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: this.config.timeout });
       await sleep(4000);
 
       // Try to find room listings
@@ -172,7 +177,10 @@ export class OfficialScraper extends BaseScraper {
   }
 }
 
-// Factory to create all official scrapers
+// Factory — creates scrapers only for active (non-disabled) hotels
 export function createOfficialScrapers(): OfficialScraper[] {
+  for (const [hotel, reason] of Object.entries(DISABLED_OFFICIAL)) {
+    console.log(`[official] Skipping ${hotel}: ${reason}`);
+  }
   return Object.keys(OFFICIAL_CONFIGS).map(name => new OfficialScraper(name));
 }

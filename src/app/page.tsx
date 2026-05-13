@@ -287,6 +287,22 @@ export default function DashboardPage() {
                     {Array(9).fill(0).map((__, j) => <td key={j} className="py-5 px-5"><div className="h-4 rounded shimmer bg-black/5 w-3/4" /></td>)}
                   </tr>
                 ))
+                : liveRates.length === 0 ? (
+                  <tr>
+                    <td colSpan={9}>
+                      <div className="py-14 flex flex-col items-center gap-3 text-center">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                          style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' }}>
+                          <span style={{ fontSize: 18, color: '#f59e0b' }}>⏳</span>
+                        </div>
+                        <p className="text-sm font-semibold" style={{ color: '#f59e0b' }}>No rates collected yet</p>
+                        <p className="text-xs max-w-xs" style={{ color: 'var(--color-warm-slate)', opacity: 0.6 }}>
+                          Scrape pending — pipeline runs at 6 AM, 12 PM, and 6 PM IST
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                )
                 : liveRates.map((hotel, i) => {
                   const isLast = i === liveRates.length - 1;
                   const trendColor = hotel.trend === 'up' ? '#10b981' : hotel.trend === 'down' ? '#ef4444' : 'var(--color-warm-slate)';
