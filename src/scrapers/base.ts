@@ -2,11 +2,12 @@
 // KodaiRateIQ — Base Scraper Class
 // ============================================================
 
-// Only type imports at module level — no playwright/stealth code runs during build
+// Type-only imports at module level — no playwright/stealth code runs at build time
 import type { Browser, BrowserContext, Page } from 'playwright';
 import type { ScrapedRate, ScrapeResult, ScraperConfig } from '@/types';
 import { sleep } from '@/lib/utils';
 
+// Network errors worth retrying
 const RETRYABLE_ERRORS = [
   'ERR_NAME_NOT_RESOLVED',
   'ERR_CONNECTION_REFUSED',
@@ -17,41 +18,56 @@ const RETRYABLE_ERRORS = [
   'Navigation timeout',
   'Target page, context or browser has been closed',
   'browserType.launch',
+  'browserContext.newPage',
+  'Cannot read properties of null',
+];
+
+// Errors that indicate the browser process itself crashed — need a full restart
+const BROWSER_FATAL_ERRORS = [
+  'Target page, context or browser has been closed',
+  'browserType.launch',
+  'browserContext.newPage',
+  'Cannot read properties of null',
 ];
 
 function isRetryable(err: Error): boolean {
   return RETRYABLE_ERRORS.some(pat => err.message.includes(pat));
 }
 
-const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+function isBrowserFatal(err: Error): boolean {
+  return BROWSER_FATAL_ERRORS.some(pat => err.message.includes(pat));
+}
 
-// ── Singleton browser manager ─────────────────────────────────
+const CHROME_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+// ── Browser singleton ─────────────────────────────────────────
+// Only the Browser process is shared. Each scraper execution gets
+// its own BrowserContext so that a reset or failure in one scraper
+// never kills pages owned by another concurrent scraper.
 class BrowserManager {
   private static instance: BrowserManager | null = null;
   private browser: Browser | null = null;
-  private context: BrowserContext | null = null;
-  private initPromise: Promise<void> | null = null;
+  private launchPromise: Promise<Browser> | null = null;
 
   static getInstance(): BrowserManager {
-    if (!BrowserManager.instance) {
-      BrowserManager.instance = new BrowserManager();
-    }
+    if (!BrowserManager.instance) BrowserManager.instance = new BrowserManager();
     return BrowserManager.instance;
   }
 
-  async init(): Promise<void> {
-    if (this.browser) return;
-    if (this.initPromise) return this.initPromise;
+  async getBrowser(): Promise<Browser> {
+    if (this.browser) return this.browser;
+    if (this.launchPromise) return this.launchPromise;
 
-    this.initPromise = (async () => {
-      // Dynamic requires — deferred to runtime, never evaluated during Next.js build
+    this.launchPromise = (async () => {
+      // Dynamic requires — never evaluated during Next.js build phase
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { chromium } = require('playwright-extra');
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const StealthPlugin = require('puppeteer-extra-plugin-stealth');
       chromium.use(StealthPlugin());
 
-      this.browser = await chromium.launch({
+      const browser: Browser = await chromium.launch({
         headless: true,
         chromiumSandbox: false,
         args: [
@@ -63,57 +79,59 @@ class BrowserManager {
         ],
       });
 
-      this.context = await this.browser!.newContext({
-        userAgent: CHROME_UA,
-        viewport: { width: 1366, height: 768 },
-        locale: 'en-IN',
-        timezoneId: 'Asia/Kolkata',
-        extraHTTPHeaders: {
-          'accept-language': 'en-IN,en;q=0.9',
-        },
+      // Auto-clear when Chromium process exits unexpectedly
+      browser.on('disconnected', () => {
+        this.browser = null;
+        this.launchPromise = null;
       });
 
-      await this.context.route('**/*.{png,jpg,jpeg,gif,svg,woff,woff2,ttf,eot,ico}', r => r.abort());
-      await this.context.route('**/analytics**', r => r.abort());
-      await this.context.route('**/tracking**', r => r.abort());
-      await this.context.route('**/ads/**', r => r.abort());
-      await this.context.route('**/gtm.js**', r => r.abort());
-      await this.context.route('**/fbevents**', r => r.abort());
+      this.browser = browser;
+      this.launchPromise = null;
+      return browser;
     })();
 
-    await this.initPromise;
-    this.initPromise = null;
+    return this.launchPromise;
   }
 
-  async getPage(): Promise<Page> {
-    await this.init();
-
-    const page = await this.context!.newPage();
-    page.setDefaultTimeout(30000);
-    page.setDefaultNavigationTimeout(60000);
-
-    await page.addInitScript(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => false });
-      Object.defineProperty(navigator, 'plugins',   { get: () => [1, 2, 3, 4, 5] });
-      Object.defineProperty(navigator, 'languages', { get: () => ['en-IN', 'en-US', 'en'] });
+  // Creates an isolated context — safe to close without affecting other scrapers
+  async newContext(): Promise<BrowserContext> {
+    const browser = await this.getBrowser();
+    const ctx = await browser.newContext({
+      userAgent: CHROME_UA,
+      viewport: { width: 1366, height: 768 },
+      locale: 'en-IN',
+      timezoneId: 'Asia/Kolkata',
+      extraHTTPHeaders: { 'accept-language': 'en-IN,en;q=0.9' },
     });
 
-    return page;
+    // Block non-essential resources per context
+    await ctx.route('**/*.{png,jpg,jpeg,gif,svg,woff,woff2,ttf,eot,ico}', r => r.abort());
+    await ctx.route('**/analytics**', r => r.abort());
+    await ctx.route('**/tracking**', r => r.abort());
+    await ctx.route('**/ads/**', r => r.abort());
+    await ctx.route('**/gtm.js**', r => r.abort());
+    await ctx.route('**/fbevents**', r => r.abort());
+
+    return ctx;
   }
 
-  async reset(): Promise<void> {
+  // Only called when the browser process itself has crashed
+  async resetBrowser(): Promise<void> {
     try {
-      if (this.context) { await this.context.close(); this.context = null; }
-      if (this.browser)  { await this.browser.close();  this.browser  = null; }
+      if (this.browser) await this.browser.close();
     } catch { /* ignore */ }
-    this.initPromise = null;
+    this.browser = null;
+    this.launchPromise = null;
   }
 }
 
 export const browserManager = BrowserManager.getInstance();
 
+// ── Base scraper ──────────────────────────────────────────────
 export abstract class BaseScraper {
   protected config: ScraperConfig;
+  // Each execute() call owns its own context; never shared across concurrent scrapers
+  private _context: BrowserContext | null = null;
 
   constructor(config?: Partial<ScraperConfig>) {
     this.config = {
@@ -130,7 +148,23 @@ export abstract class BaseScraper {
   abstract scrapeHotel(hotelName: string, checkIn: Date, checkOut: Date): Promise<ScrapedRate[]>;
 
   protected async newPage(): Promise<Page> {
-    return browserManager.getPage();
+    if (!this._context) throw new Error('No browser context — call execute() first');
+    const page = await this._context.newPage();
+    page.setDefaultTimeout(30000);
+    page.setDefaultNavigationTimeout(60000);
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+      Object.defineProperty(navigator, 'plugins',   { get: () => [1, 2, 3, 4, 5] });
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-IN', 'en-US', 'en'] });
+    });
+    return page;
+  }
+
+  private async closeContext(): Promise<void> {
+    if (this._context) {
+      try { await this._context.close(); } catch { /* ignore */ }
+      this._context = null;
+    }
   }
 
   async execute(hotelName: string, checkIn: Date, checkOut: Date): Promise<ScrapeResult> {
@@ -138,6 +172,20 @@ export abstract class BaseScraper {
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= this.config.maxRetries; attempt++) {
+      // Fresh isolated context every attempt — closing it never affects other scrapers
+      try {
+        this._context = await browserManager.newContext();
+      } catch (ctxErr) {
+        lastError = ctxErr as Error;
+        console.error(`[${this.source}] Attempt ${attempt + 1} — context creation failed for ${hotelName}: ${lastError.message}`);
+        await browserManager.resetBrowser();
+        if (attempt < this.config.maxRetries) {
+          await sleep(this.config.retryDelay * Math.pow(2, attempt));
+          continue;
+        }
+        break;
+      }
+
       try {
         const rates = await this.scrapeHotel(hotelName, checkIn, checkOut);
         return {
@@ -161,8 +209,12 @@ export abstract class BaseScraper {
         if (attempt < this.config.maxRetries) {
           const jitter = Math.random() * 500;
           await sleep(this.config.retryDelay * Math.pow(2, attempt) + jitter);
-          await browserManager.reset();
+          // Only restart the browser process on fatal browser crashes
+          if (isBrowserFatal(lastError)) await browserManager.resetBrowser();
         }
+      } finally {
+        // Always close our context — never leaks, never affects other scrapers
+        await this.closeContext();
       }
     }
 
@@ -178,7 +230,7 @@ export abstract class BaseScraper {
   }
 
   async cleanup(): Promise<void> {
-    // Cleanup is managed by the singleton; individual scrapers don't own the browser
+    await this.closeContext();
   }
 
   protected extractPrice(text: string): number | null {
