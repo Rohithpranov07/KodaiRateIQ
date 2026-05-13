@@ -21,6 +21,8 @@ model Hotel {
   phone               String?
   isTarget            Boolean              @default(false)
   role                String               @default("competitor")
+  luxuryTier          String?
+  facilityScore       String?
   imageUrl            String?
   description         String?
   createdAt           DateTime             @default(now())
@@ -28,6 +30,7 @@ model Hotel {
   competitorSnapshots CompetitorSnapshot[]
   dailyRates          DailyRate[]
   facilities          Facility[]
+  otaBarAudits        OtaBarAudit[]
   rateHistory         RateHistory[]
   recommendations     Recommendation[]
   rooms               Room[]
@@ -98,19 +101,26 @@ model DailyRate {
 }
 
 model Facility {
-  id          String   @id @default(cuid())
-  hotelId     String
-  name        String
-  category    String
-  available   Boolean  @default(true)
-  quality     Int?     @default(3)
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  hotel       Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  id                 String   @id @default(cuid())
+  hotelId            String
+  normalizedKey      String
+  name               String
+  category           String
+  available          Boolean  @default(true)
+  quality            Int?     @default(3)
+  level              String   @default("Standard")
+  luxuryScore        Float?
+  verificationSource String   @default("ota-verified")
+  confidence         Float    @default(0.9)
+  lastVerified       DateTime @default(now())
+  description        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  hotel              Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
 
-  @@unique([hotelId, name])
+  @@unique([hotelId, normalizedKey])
   @@index([hotelId])
+  @@index([normalizedKey])
 }
 
 model Recommendation {
@@ -128,7 +138,7 @@ model Recommendation {
   reasoning          String
   avgCompetitorRate  Float?
   marketPosition     String?
-  aiModel            String    @default("gemini-2.0-flash")
+  aiModel            String    @default("MiMo-7B-RL")
   aiPromptVersion    String?
   rawAiResponse      String?
   seasonType         String?
@@ -164,23 +174,37 @@ model RateHistory {
 }
 
 model CompetitorSnapshot {
-  id           String   @id @default(cuid())
-  hotelId      String
-  date         DateTime @db.Date
-  bestMapRate  Float?
-  bestCpRate   Float?
-  bestEpRate   Float?
-  bestSource   String?
-  worstMapRate Float?
-  avgMapRate   Float?
-  availability String?
-  activeOffers String?
-  createdAt    DateTime @default(now())
-  hotel        Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  id               String   @id @default(cuid())
+  hotelId          String
+  date             DateTime @db.Date
+  // TRUE VERIFIED BAR — lowest confirmed MAP rate across all OTAs
+  bestMapRate      Float?
+  bestCpRate       Float?
+  bestEpRate       Float?
+  bestSource       String?  // OTA that had the lowest verified MAP BAR
+  worstMapRate     Float?
+  avgMapRate       Float?
+  availability     String?
+  activeOffers     String?
+  // Enterprise BAR metadata
+  otaCount         Int      @default(0)  // Number of OTAs that returned MAP rates
+  otasChecked      Int      @default(0)  // Total OTAs attempted
+  otaBreakdown     String?  // JSON: {source: rate} for all OTAs that returned MAP rates
+  verifiedAt       DateTime? // Timestamp of last cross-verification
+  confidenceScore  Float    @default(0.5)
+  confidenceLabel  String   @default("LOW") // HIGH | MEDIUM | LOW
+  isStale          Boolean  @default(false)
+  staleReason      String?
+  anomalyFlags     String?  // JSON: list of anomaly descriptions
+  roomCategory     String?  // Primary room tier used for this BAR
+  taxNormalized    Boolean  @default(true) // All rates stored tax-inclusive
+  createdAt        DateTime @default(now())
+  hotel            Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
 
   @@unique([hotelId, date])
   @@index([hotelId, date])
   @@index([date])
+  @@index([confidenceLabel])
 }
 
 model ScrapeLog {
@@ -214,4 +238,58 @@ model AiInsight {
 
   @@index([date])
   @@index([type])
+}
+
+// AI reasoning audit trail — stores every MiMo prompt/response for auditability
+model AiReasoningHistory {
+  id               String   @id @default(cuid())
+  model            String
+  promptSnapshot   String   @db.Text
+  rawResponse      String   @db.Text
+  validationStatus String   @default("pending")
+  validationErrors String?
+  tokenUsage       Int?
+  durationMs       Int?
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([validationStatus])
+}
+
+// OTA BAR audit — per-OTA MAP rate log for every scrape cycle
+// Enables true historical OTA winner tracking and rate spread analysis
+model OtaBarAudit {
+  id           String   @id @default(cuid())
+  hotelId      String
+  date         DateTime @db.Date
+  scrapeWindow String   // '6am' | '12pm' | '6pm'
+  source       String
+  mapRate      Float?
+  cpRate       Float?
+  epRate       Float?
+  roomType     String?
+  mealPlan     String?  // MAP | CP | EP | UNKNOWN
+  taxInclusive Boolean  @default(false)
+  isWinner     Boolean  @default(false) // true if this OTA had the lowest MAP that cycle
+  confidence   Float    @default(0.5)
+  scrapedAt    DateTime @default(now())
+  hotel        Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  @@index([hotelId, date])
+  @@index([date, source])
+  @@index([isWinner, date])
+}
+
+// AI confidence tracking — monitors score drift over time
+model AiConfidenceLog {
+  id                 String   @id @default(cuid())
+  date               DateTime @db.Date
+  confidenceScore    Float
+  strategy           String
+  seasonType         String?
+  competitorDataHash String?
+  createdAt          DateTime @default(now())
+
+  @@index([date])
+  @@index([createdAt])
 }

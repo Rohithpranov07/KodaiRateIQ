@@ -1,5 +1,5 @@
 // ============================================================
-// KodaiRateIQ — MakeMyTrip Scraper (v2 — MAP Classifier)
+// KodaiRateIQ — Hotels.com Scraper
 // ============================================================
 
 import { BaseScraper } from './base';
@@ -7,20 +7,21 @@ import { classifyMealPlan, normalizeTaxInclusive } from '@/engine/map-classifier
 import type { ScrapedRate } from '@/types';
 import { sleep } from '@/lib/utils';
 
-const MMT_SLUGS: Record<string, string> = {
-  'The Carlton':               'the-carlton-kodaikanal',
-  'The Tamara Kodai':          'the-tamara-kodaikanal',
-  'Hotel Kodai International': 'hotel-kodai-international-kodaikanal',
-  'Sterling Kodai Lake':       'sterling-kodai-lake-kodaikanal',
-  'Le Poshe by Sparsa':        'le-poshe-by-sparsa-kodaikanal',
+// Hotels.com uses same Expedia property IDs under the hood
+const HOTELSDOTCOM_IDS: Record<string, string> = {
+  'The Carlton':               '6823654',
+  'The Tamara Kodai':          '12507628',
+  'Hotel Kodai International': '3296478',
+  'Sterling Kodai Lake':       '6432118',
+  'Le Poshe by Sparsa':        '14856234',
 };
 
-export class MakeMyTripScraper extends BaseScraper {
-  get source(): string { return 'makemytrip'; }
+export class HotelsDotComScraper extends BaseScraper {
+  get source(): string { return 'hotels.com'; }
 
   async scrapeHotel(hotelName: string, checkIn: Date, checkOut: Date): Promise<ScrapedRate[]> {
-    const slug = MMT_SLUGS[hotelName];
-    if (!slug) return [];
+    const propertyId = HOTELSDOTCOM_IDS[hotelName];
+    if (!propertyId) return [];
 
     const page = await this.newPage();
     const rates: ScrapedRate[] = [];
@@ -28,47 +29,44 @@ export class MakeMyTripScraper extends BaseScraper {
     try {
       const ci = this.formatDate(checkIn);
       const co = this.formatDate(checkOut);
-      const url = `https://www.makemytrip.com/hotels/hotel-details/?hotelId=${slug}&checkin=${ci}&checkout=${co}&roomStayQualifier=2e0e&city=CTKDI`;
+
+      const url = `https://www.hotels.com/ho${propertyId}?chkin=${ci}&chkout=${co}&rm1=a2&x_pwa=1`;
 
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: this.config.timeout });
-      await sleep(5000);
+      await sleep(4500);
 
-      // Close popup/modal
       try {
-        const closeBtn = page.locator('[class*="close"], [class*="Close"]').first();
+        const closeBtn = page.locator('[data-stid="modal-close"], [aria-label="Close"]').first();
         if (await closeBtn.isVisible({ timeout: 2000 })) await closeBtn.click();
       } catch { /* no popup */ }
 
-      const roomSections = await page.$$('[class*="roomCard"], [class*="RoomCard"], [id*="room"]');
+      const rooms = await page.$$('[data-stid="property-room-unit"]');
 
-      for (const section of roomSections) {
+      for (const room of rooms) {
         try {
-          const nameEl = await section.$('[class*="roomType"], [class*="RoomType"], h3');
+          const nameEl = await room.$('h3, [class*="uitk-heading"]');
           const roomName = (await nameEl?.textContent())?.trim() || 'Standard Room';
 
-          const priceEl = await section.$('[class*="roomPrice"], [class*="price"], [class*="amount"]');
+          const priceEl = await room.$('[class*="uitk-lockup-price"]');
           const priceText = await priceEl?.textContent();
           const price = this.extractPrice(priceText || '');
 
-          const inclEl = await section.$('[class*="inclusion"], [class*="meal"]');
+          const inclEl = await room.$('[class*="inclusion"], [class*="amenity"]');
           const inclText = (await inclEl?.textContent())?.toLowerCase() || '';
 
           if (price && price > 1000) {
             const meal = classifyMealPlan(inclText, roomName);
             if (meal.shouldReject) continue;
 
-            // MMT shows pre-tax prices
-            const normalized = normalizeTaxInclusive(price, false);
-
             rates.push({
               hotelName,
               roomType: roomName,
-              mapRate: meal.isMapEligible ? normalized : null,
-              cpRate: meal.plan === 'CP' ? normalized : null,
-              epRate: meal.plan === 'EP' || meal.plan === 'UNKNOWN' ? normalized : null,
+              mapRate: meal.isMapEligible ? normalizeTaxInclusive(price, true) : null,
+              cpRate: meal.plan === 'CP' ? normalizeTaxInclusive(price, true) : null,
+              epRate: meal.plan === 'EP' || meal.plan === 'UNKNOWN' ? normalizeTaxInclusive(price, true) : null,
               taxPercent: 18,
-              taxInclusive: false,
-              totalWithTax: normalized,
+              taxInclusive: true,
+              totalWithTax: price,
               source: this.source,
               sourceUrl: url,
               isAvailable: true,
@@ -76,7 +74,7 @@ export class MakeMyTripScraper extends BaseScraper {
               dinnerIncluded: meal.dinnerIncluded,
               lunchIncluded: meal.lunchIncluded,
               mealDetails: inclText || undefined,
-              freeCancellation: inclText.includes('free cancel'),
+              freeCancellation: inclText.includes('free cancel') || inclText.includes('fully refundable'),
               hasDiscount: false,
               occupancy: 2,
               scrapedAt: new Date(),
@@ -87,22 +85,22 @@ export class MakeMyTripScraper extends BaseScraper {
       }
 
       if (rates.length === 0) {
-        const mainPrice = await page.$('[class*="tariff"], [class*="finalPrice"]');
-        const price = this.extractPrice((await mainPrice?.textContent()) || '');
-        if (price && price > 2000) {
+        const priceEl = await page.$('[class*="uitk-lockup-price"]');
+        const price = this.extractPrice((await priceEl?.textContent()) || '');
+        if (price && price > 1000) {
           rates.push({
             hotelName, roomType: 'Best Available',
-            mapRate: null, cpRate: null, epRate: normalizeTaxInclusive(price, false),
-            taxPercent: 18, taxInclusive: false, totalWithTax: normalizeTaxInclusive(price, false),
+            mapRate: null, cpRate: null, epRate: price,
+            taxPercent: 18, taxInclusive: true, totalWithTax: price,
             source: this.source, sourceUrl: url, isAvailable: true,
             breakfastIncluded: false, dinnerIncluded: false, lunchIncluded: false,
             freeCancellation: false, hasDiscount: false,
-            occupancy: 2, scrapedAt: new Date(), confidence: 0.60,
+            occupancy: 2, scrapedAt: new Date(), confidence: 0.58,
           });
         }
       }
     } catch (err) {
-      console.error(`[mmt] Failed for ${hotelName}:`, err);
+      console.error(`[hotels.com] Failed for ${hotelName}:`, err);
       throw err;
     } finally {
       await page.close();

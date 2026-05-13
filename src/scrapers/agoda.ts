@@ -1,5 +1,5 @@
 // ============================================================
-// KodaiRateIQ — MakeMyTrip Scraper (v2 — MAP Classifier)
+// KodaiRateIQ — Agoda Scraper (v2 — MAP Classifier)
 // ============================================================
 
 import { BaseScraper } from './base';
@@ -7,20 +7,23 @@ import { classifyMealPlan, normalizeTaxInclusive } from '@/engine/map-classifier
 import type { ScrapedRate } from '@/types';
 import { sleep } from '@/lib/utils';
 
-const MMT_SLUGS: Record<string, string> = {
+const AGODA_SLUGS: Record<string, string> = {
   'The Carlton':               'the-carlton-kodaikanal',
   'The Tamara Kodai':          'the-tamara-kodaikanal',
-  'Hotel Kodai International': 'hotel-kodai-international-kodaikanal',
-  'Sterling Kodai Lake':       'sterling-kodai-lake-kodaikanal',
+  'Hotel Kodai International': 'hotel-kodai-international',
+  'Sterling Kodai Lake':       'sterling-kodai-lake',
   'Le Poshe by Sparsa':        'le-poshe-by-sparsa-kodaikanal',
 };
 
-export class MakeMyTripScraper extends BaseScraper {
-  get source(): string { return 'makemytrip'; }
+export class AgodaScraper extends BaseScraper {
+  get source(): string { return 'agoda'; }
 
   async scrapeHotel(hotelName: string, checkIn: Date, checkOut: Date): Promise<ScrapedRate[]> {
-    const slug = MMT_SLUGS[hotelName];
-    if (!slug) return [];
+    const slug = AGODA_SLUGS[hotelName];
+    if (!slug) {
+      console.warn(`[agoda] No slug for: ${hotelName}`);
+      return [];
+    }
 
     const page = await this.newPage();
     const rates: ScrapedRate[] = [];
@@ -28,47 +31,47 @@ export class MakeMyTripScraper extends BaseScraper {
     try {
       const ci = this.formatDate(checkIn);
       const co = this.formatDate(checkOut);
-      const url = `https://www.makemytrip.com/hotels/hotel-details/?hotelId=${slug}&checkin=${ci}&checkout=${co}&roomStayQualifier=2e0e&city=CTKDI`;
+      const url = `https://www.agoda.com/en-in/${slug}/hotel/kodaikanal-india.html?checkIn=${ci}&checkOut=${co}&rooms=1&adults=2&children=0`;
 
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: this.config.timeout });
       await sleep(5000);
 
-      // Close popup/modal
+      // Cookie consent
       try {
-        const closeBtn = page.locator('[class*="close"], [class*="Close"]').first();
-        if (await closeBtn.isVisible({ timeout: 2000 })) await closeBtn.click();
-      } catch { /* no popup */ }
+        const cookieBtn = page.locator('[data-selenium="cookie-consent-accept-btn"], #consent-btn');
+        if (await cookieBtn.isVisible({ timeout: 3000 })) {
+          await cookieBtn.click();
+          await sleep(1000);
+        }
+      } catch { /* no cookie banner */ }
 
-      const roomSections = await page.$$('[class*="roomCard"], [class*="RoomCard"], [id*="room"]');
+      const roomCards = await page.$$('[data-selenium="RoomCard"], [class*="RoomCard"], [class*="room-card"]');
 
-      for (const section of roomSections) {
+      for (const card of roomCards) {
         try {
-          const nameEl = await section.$('[class*="roomType"], [class*="RoomType"], h3');
+          const nameEl = await card.$('[data-selenium="RoomName"], [class*="RoomName"], h3');
           const roomName = (await nameEl?.textContent())?.trim() || 'Standard Room';
 
-          const priceEl = await section.$('[class*="roomPrice"], [class*="price"], [class*="amount"]');
+          const priceEl = await card.$('[data-selenium="PriceDisplay"], [class*="price"], [class*="Price"]');
           const priceText = await priceEl?.textContent();
           const price = this.extractPrice(priceText || '');
 
-          const inclEl = await section.$('[class*="inclusion"], [class*="meal"]');
+          const inclEl = await card.$('[class*="inclusion"], [class*="benefit"], [class*="meal"]');
           const inclText = (await inclEl?.textContent())?.toLowerCase() || '';
 
           if (price && price > 1000) {
             const meal = classifyMealPlan(inclText, roomName);
             if (meal.shouldReject) continue;
 
-            // MMT shows pre-tax prices
-            const normalized = normalizeTaxInclusive(price, false);
-
             rates.push({
               hotelName,
               roomType: roomName,
-              mapRate: meal.isMapEligible ? normalized : null,
-              cpRate: meal.plan === 'CP' ? normalized : null,
-              epRate: meal.plan === 'EP' || meal.plan === 'UNKNOWN' ? normalized : null,
+              mapRate: meal.isMapEligible ? normalizeTaxInclusive(price, true) : null,
+              cpRate: meal.plan === 'CP' ? normalizeTaxInclusive(price, true) : null,
+              epRate: meal.plan === 'EP' || meal.plan === 'UNKNOWN' ? normalizeTaxInclusive(price, true) : null,
               taxPercent: 18,
-              taxInclusive: false,
-              totalWithTax: normalized,
+              taxInclusive: true,
+              totalWithTax: price,
               source: this.source,
               sourceUrl: url,
               isAvailable: true,
@@ -80,20 +83,20 @@ export class MakeMyTripScraper extends BaseScraper {
               hasDiscount: false,
               occupancy: 2,
               scrapedAt: new Date(),
-              confidence: meal.confidence * 0.88,
+              confidence: meal.confidence * 0.90,
             });
           }
-        } catch { /* skip */ }
+        } catch { /* skip malformed */ }
       }
 
       if (rates.length === 0) {
-        const mainPrice = await page.$('[class*="tariff"], [class*="finalPrice"]');
-        const price = this.extractPrice((await mainPrice?.textContent()) || '');
-        if (price && price > 2000) {
+        const priceEl = await page.$('[data-selenium="PriceDisplay"], [class*="PropertyCard__Price"]');
+        const price = this.extractPrice((await priceEl?.textContent()) || '');
+        if (price && price > 2000 && price < 100000) {
           rates.push({
             hotelName, roomType: 'Best Available',
-            mapRate: null, cpRate: null, epRate: normalizeTaxInclusive(price, false),
-            taxPercent: 18, taxInclusive: false, totalWithTax: normalizeTaxInclusive(price, false),
+            mapRate: null, cpRate: null, epRate: price,
+            taxPercent: 18, taxInclusive: true, totalWithTax: price,
             source: this.source, sourceUrl: url, isAvailable: true,
             breakfastIncluded: false, dinnerIncluded: false, lunchIncluded: false,
             freeCancellation: false, hasDiscount: false,
@@ -102,7 +105,7 @@ export class MakeMyTripScraper extends BaseScraper {
         }
       }
     } catch (err) {
-      console.error(`[mmt] Failed for ${hotelName}:`, err);
+      console.error(`[agoda] Failed for ${hotelName}:`, err);
       throw err;
     } finally {
       await page.close();

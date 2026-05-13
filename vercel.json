@@ -1,16 +1,24 @@
 {
   "crons": [
     {
-      "path": "/api/cron?secret=${CRON_SECRET}",
-      "schedule": "30 0 * * *"
+      "path": "/api/cron?secret=${CRON_SECRET}&job=scrape",
+      "schedule": "30 0 * * *",
+      "comment": "6:00 AM IST = 00:30 UTC — Morning rate sweep"
     },
     {
-      "path": "/api/cron?secret=${CRON_SECRET}",
-      "schedule": "30 6 * * *"
+      "path": "/api/cron?secret=${CRON_SECRET}&job=scrape",
+      "schedule": "30 6 * * *",
+      "comment": "12:00 PM IST = 06:30 UTC — Midday rate update"
     },
     {
-      "path": "/api/cron?secret=${CRON_SECRET}",
-      "schedule": "30 12 * * *"
+      "path": "/api/cron?secret=${CRON_SECRET}&job=scrape",
+      "schedule": "30 12 * * *",
+      "comment": "6:00 PM IST = 12:30 UTC — Evening rate capture"
+    },
+    {
+      "path": "/api/cron?secret=${CRON_SECRET}&job=cleanup",
+      "schedule": "30 20 * * *",
+      "comment": "2:00 AM IST = 20:30 UTC — Stale detection + log pruning"
     }
   ]
 }

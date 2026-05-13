@@ -1,32 +1,28 @@
 // ============================================================
-// KodaiRateIQ — Booking.com Scraper
+// KodaiRateIQ — Booking.com Scraper (v2 — MAP Classifier)
 // ============================================================
 
 import { Page } from 'playwright';
 import { BaseScraper } from './base';
+import { classifyMealPlan, normalizeTaxInclusive } from '@/engine/map-classifier';
 import type { ScrapedRate } from '@/types';
 import { sleep } from '@/lib/utils';
 
-/**
- * Hotel name to Booking.com URL slug mapping for Kodaikanal hotels
- */
 const BOOKING_SLUGS: Record<string, string> = {
-  'The Carlton': 'hotel/in/the-carlton-kodaikanal.en-gb',
-  'The Tamara Kodai': 'hotel/in/the-tamara-kodaikanal.en-gb',
+  'The Carlton':               'hotel/in/the-carlton-kodaikanal.en-gb',
+  'The Tamara Kodai':          'hotel/in/the-tamara-kodaikanal.en-gb',
   'Hotel Kodai International': 'hotel/in/kodai-international.en-gb',
-  'Sterling Kodai Lake': 'hotel/in/sterling-kodai-lake.en-gb',
-  'Le Poshe by Sparsa': 'hotel/in/le-poshe-by-sparsa.en-gb',
+  'Sterling Kodai Lake':       'hotel/in/sterling-kodai-lake.en-gb',
+  'Le Poshe by Sparsa':        'hotel/in/le-poshe-by-sparsa.en-gb',
 };
 
 export class BookingScraper extends BaseScraper {
-  get source(): string {
-    return 'booking.com';
-  }
+  get source(): string { return 'booking.com'; }
 
   async scrapeHotel(hotelName: string, checkIn: Date, checkOut: Date): Promise<ScrapedRate[]> {
     const slug = BOOKING_SLUGS[hotelName];
     if (!slug) {
-      console.warn(`[booking.com] No slug found for: ${hotelName}`);
+      console.warn(`[booking.com] No slug for: ${hotelName}`);
       return [];
     }
 
@@ -34,138 +30,102 @@ export class BookingScraper extends BaseScraper {
     const rates: ScrapedRate[] = [];
 
     try {
-      const checkInStr = this.formatDate(checkIn);
-      const checkOutStr = this.formatDate(checkOut);
-      
-      const url = `https://www.booking.com/${slug}?checkin=${checkInStr}&checkout=${checkOutStr}&group_adults=2&no_rooms=1&group_children=0`;
-      
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: this.config.timeout });
-      await sleep(3000); // Wait for dynamic content
+      const ci = this.formatDate(checkIn);
+      const co = this.formatDate(checkOut);
+      const url = `https://www.booking.com/${slug}?checkin=${ci}&checkout=${co}&group_adults=2&no_rooms=1&group_children=0`;
 
-      // Handle cookie consent if present
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: this.config.timeout });
+      await sleep(3000);
+
+      // Cookie consent
       try {
         const cookieBtn = page.locator('[id="onetrust-accept-btn-handler"]');
         if (await cookieBtn.isVisible({ timeout: 2000 })) {
           await cookieBtn.click();
           await sleep(1000);
         }
-      } catch {
-        // Cookie banner not found, continue
-      }
+      } catch { /* no cookie banner */ }
 
-      // Wait for room availability table to load
       await page.waitForSelector('[data-testid="property-section--content"]', { timeout: 15000 }).catch(() => null);
-      
-      // Try to extract room rates
-      const roomBlocks = await page.$$('[data-testid="property-section--content"] table tbody tr, .hprt-table tr');
-      
-      if (roomBlocks.length === 0) {
-        // Fallback: try alternative selectors
-        const priceElements = await page.$$('.bui-price-display__value, [data-testid="price-and-discounted-price"]');
-        
-        for (const priceEl of priceElements) {
-          const priceText = await priceEl.textContent();
-          const price = this.extractPrice(priceText || '');
-          
-          if (price && price > 1000) {
-            rates.push(this.createRate(hotelName, 'Standard Room', price, checkIn));
-          }
-        }
-      } else {
-        for (const block of roomBlocks) {
+
+      // Primary: room table rows
+      const roomRows = await page.$$('[data-testid="property-section--content"] table tbody tr, .hprt-table tr');
+
+      if (roomRows.length > 0) {
+        for (const row of roomRows) {
           try {
-            // Extract room name
-            const roomNameEl = await block.$('.hprt-roomtype-icon-link, [data-testid="room-type"]');
+            const roomNameEl = await row.$('.hprt-roomtype-icon-link, [data-testid="room-type"]');
             const roomName = (await roomNameEl?.textContent())?.trim() || 'Standard Room';
-            
-            // Extract price
-            const priceEl = await block.$('.bui-price-display__value, .prco-valign-middle-helper');
+
+            const priceEl = await row.$('.bui-price-display__value, .prco-valign-middle-helper');
             const priceText = await priceEl?.textContent();
             const price = this.extractPrice(priceText || '');
-            
-            // Extract meal plan
-            const mealEl = await block.$('.hprt-roomtype-meal, [data-testid="inclusion"]');
+
+            const mealEl = await row.$('.hprt-roomtype-meal, [data-testid="inclusion"]');
             const mealText = (await mealEl?.textContent())?.toLowerCase() || '';
-            
-            // Extract cancellation
-            const cancelEl = await block.$('.hprt-roomtype-cancellation');
+
+            const cancelEl = await row.$('.hprt-roomtype-cancellation');
             const cancelText = (await cancelEl?.textContent())?.trim() || '';
-            
+
             if (price && price > 1000) {
-              const breakfastIncluded = mealText.includes('breakfast');
-              const dinnerIncluded = mealText.includes('dinner') || mealText.includes('half board');
-              const isMap = breakfastIncluded && dinnerIncluded;
-              
+              const meal = classifyMealPlan(mealText, roomName);
+              if (meal.shouldReject) continue;
+
+              // Booking.com typically shows tax-inclusive for INR
               rates.push({
                 hotelName,
                 roomType: roomName,
-                mapRate: isMap ? price : null,
-                cpRate: breakfastIncluded && !dinnerIncluded ? price : null,
-                epRate: !breakfastIncluded ? price : null,
+                mapRate: meal.isMapEligible ? normalizeTaxInclusive(price, true) : null,
+                cpRate: meal.plan === 'CP' ? normalizeTaxInclusive(price, true) : null,
+                epRate: meal.plan === 'EP' || meal.plan === 'UNKNOWN' ? normalizeTaxInclusive(price, true) : null,
                 taxPercent: 18,
-                taxInclusive: true, // Booking.com typically shows tax-inclusive
+                taxInclusive: true,
                 totalWithTax: price,
                 source: this.source,
                 sourceUrl: url,
                 isAvailable: true,
-                breakfastIncluded,
-                dinnerIncluded,
-                lunchIncluded: false,
+                breakfastIncluded: meal.breakfastIncluded,
+                dinnerIncluded: meal.dinnerIncluded,
+                lunchIncluded: meal.lunchIncluded,
                 mealDetails: mealText || undefined,
                 cancellationPolicy: cancelText || undefined,
                 freeCancellation: cancelText.toLowerCase().includes('free'),
                 hasDiscount: false,
                 occupancy: 2,
                 scrapedAt: new Date(),
-                confidence: 0.85,
+                confidence: meal.confidence * 0.92,
               });
             }
-          } catch (blockError) {
-            console.warn('[booking.com] Error parsing room block:', blockError);
-          }
+          } catch { /* skip malformed row */ }
         }
       }
 
-      // If we still have no rates, try the main price display
+      // Fallback: alternative price selectors
       if (rates.length === 0) {
-        const mainPrice = await page.$('.hp-group-header__price__from, [data-testid="price-for-x-nights"]');
-        const mainPriceText = await mainPrice?.textContent();
-        const price = this.extractPrice(mainPriceText || '');
-        
-        if (price && price > 1000) {
-          rates.push(this.createRate(hotelName, 'Best Available', price, checkIn));
+        const priceEls = await page.$$('.bui-price-display__value, [data-testid="price-and-discounted-price"]');
+        for (const el of priceEls) {
+          const price = this.extractPrice((await el.textContent()) || '');
+          if (price && price > 1000) {
+            rates.push({
+              hotelName, roomType: 'Best Available',
+              mapRate: null, cpRate: null, epRate: price,
+              taxPercent: 18, taxInclusive: true, totalWithTax: price,
+              source: this.source, sourceUrl: url, isAvailable: true,
+              breakfastIncluded: false, dinnerIncluded: false, lunchIncluded: false,
+              freeCancellation: false, hasDiscount: false,
+              occupancy: 2, scrapedAt: new Date(), confidence: 0.65,
+            });
+            break;
+          }
         }
       }
-    } catch (error) {
-      console.error(`[booking.com] Scraping failed for ${hotelName}:`, error);
-      throw error;
+    } catch (err) {
+      console.error(`[booking.com] Failed for ${hotelName}:`, err);
+      throw err;
     } finally {
       await page.close();
     }
 
     return rates;
-  }
-
-  private createRate(hotelName: string, roomType: string, price: number, date: Date): ScrapedRate {
-    return {
-      hotelName,
-      roomType,
-      mapRate: null,
-      cpRate: null,
-      epRate: price,
-      taxPercent: 18,
-      taxInclusive: true,
-      totalWithTax: price,
-      source: this.source,
-      isAvailable: true,
-      breakfastIncluded: false,
-      dinnerIncluded: false,
-      lunchIncluded: false,
-      freeCancellation: false,
-      hasDiscount: false,
-      occupancy: 2,
-      scrapedAt: new Date(),
-      confidence: 0.7,
-    };
   }
 }

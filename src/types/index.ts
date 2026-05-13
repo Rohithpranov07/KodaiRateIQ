@@ -82,8 +82,8 @@ export interface CompetitorRateSummary {
   position: string;
 }
 
-// AI Gemini response
-export interface GeminiRecommendation {
+// AI recommendation response (MiMo AI — OpenAI-compatible)
+export interface AiRecommendation {
   recommended_map_rate: number;
   confidence_score: number;
   reasoning: string;
@@ -95,16 +95,20 @@ export interface GeminiRecommendation {
   season_type: string;
   demand_level: string;
   weekend_premium_percent: number;
-  insights: GeminiInsight[];
+  insights: AiInsight[];
 }
 
-export interface GeminiInsight {
+export interface AiInsight {
   type: string;
   title: string;
   summary: string;
   severity: 'info' | 'warning' | 'critical' | 'opportunity';
   actionable: boolean;
 }
+
+// Backward-compatible aliases
+export type GeminiRecommendation = AiRecommendation;
+export type GeminiInsight = AiInsight;
 
 // Dashboard data
 export interface DashboardData {
@@ -122,6 +126,8 @@ export interface LiveRateRow {
   hotelName: string;
   slug: string;
   category: string;
+  luxuryTier: string | null;
+  facilityScore: string | null;
   starRating: number;
   role: string;
   currentMapRate: number | null;
@@ -134,6 +140,12 @@ export interface LiveRateRow {
   availability: string;
   isTarget: boolean;
   recommendedRate?: number;
+  // Enterprise trust indicators
+  confidence: number;
+  confidenceLabel: string;
+  freshness: string;
+  lastVerifiedAt: string | null;
+  verificationSources: number;
 }
 
 export interface PriceHistoryPoint {

@@ -1,16 +1,17 @@
 // ============================================================
 // KodaiRateIQ — Pricing Recommendation Engine
 // Core business logic for Hotel Kodai International pricing
+// AI Provider: Xiaomi MiMo AI (https://token-plan-sgp.xiaomimimo.com/v1)
 // ============================================================
 
 import prisma from '@/lib/db';
-import { generatePricingRecommendation, generateMarketInsights } from '@/lib/gemini';
-import { POSITIONING_WEIGHTS, HOTELS_CONFIG, getSeasonType, isWeekend, calcDeltaPercent } from '@/lib/utils';
+import { generatePricingRecommendation } from '@/services/ai/recommendation-engine';
+import { generateMarketInsights } from '@/services/ai/insight-engine';
+import { POSITIONING_WEIGHTS, getSeasonType, isWeekend, calcDeltaPercent } from '@/lib/utils';
 import type { PricingRecommendation, CompetitorRateSummary } from '@/types';
 
-/**
- * Generate complete pricing recommendation for Hotel Kodai International
- */
+const MIMO_MODEL = process.env.MIMO_MODEL || 'MiMo-7B-RL';
+
 export async function generateRecommendation(): Promise<PricingRecommendation> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -25,31 +26,53 @@ export async function generateRecommendation(): Promise<PricingRecommendation> {
   // 3. Fetch historical data for trend analysis
   const historicalData = await fetchHistoricalData();
 
-  // 4. Calculate algorithmic recommendation
+  // 4. Fetch OTA spread data (multi-source rates for same hotel)
+  const otaSpread = await fetchOtaSpread(today);
+
+  // 5. Fetch occupancy/availability signals
+  const occupancySignals = await fetchOccupancySignals(today);
+
+  // 6. Fetch recent recommendation history (last 7 days)
+  const recentRecommendations = await fetchRecentRecommendations();
+
+  // 7. Calculate algorithmic rate as grounding reference
   const algorithmicRate = calculateAlgorithmicRate(competitorRates, seasonType, weekend);
 
-  // 5. Get AI-powered recommendation
+  // 8. Get MiMo AI-powered recommendation with full live data injection
   const aiRecommendation = await generatePricingRecommendation({
     competitorRates,
     seasonType,
     isWeekend: weekend,
     historicalAvgRate: historicalData.avgRate,
     historicalTrend: historicalData.trend,
+    recentTrends: historicalData.trends,
     date: today.toISOString().split('T')[0],
+    algorithmicRate,
+    recentRecommendations,
+    otaSpread,
+    occupancySignals,
   });
 
-  // 6. Blend algorithmic and AI recommendations
+  // 9. Blend algorithmic and AI recommendations (60% AI / 40% algorithmic)
   const blendedRate = blendRecommendations(algorithmicRate, aiRecommendation.recommended_map_rate);
 
-  // 7. Generate insights
+  // 10. Get HKI current live rate for insight context
+  const hkiCurrentRate = await fetchHkiCurrentRate(today);
+
+  // 11. Generate MiMo AI market insights with full live data
   const insights = await generateMarketInsights({
     competitorRates,
     recentTrends: historicalData.trends,
     seasonType,
+    isWeekend: weekend,
     date: today.toISOString().split('T')[0],
+    currentHkiRate: hkiCurrentRate,
+    recommendedHkiRate: blendedRate,
+    occupancySignals,
+    otaSpread,
   });
 
-  // 8. Store insights
+  // 12. Persist insights to DB
   for (const insight of insights) {
     await prisma.aiInsight.create({
       data: {
@@ -59,16 +82,16 @@ export async function generateRecommendation(): Promise<PricingRecommendation> {
         summary: insight.summary,
         severity: insight.severity,
         actionable: insight.actionable,
-        confidence: 0.8,
+        confidence: aiRecommendation.confidence_score,
       },
     });
   }
 
-  // 9. Build final recommendation
+  // 13. Build final recommendation
   const recommendation: PricingRecommendation = {
     recommendedMapRate: blendedRate,
-    recommendedCpRate: Math.round(blendedRate * 0.82), // CP is ~82% of MAP
-    recommendedEpRate: Math.round(blendedRate * 0.65), // EP is ~65% of MAP
+    recommendedCpRate: Math.round(blendedRate * 0.82),
+    recommendedEpRate: Math.round(blendedRate * 0.65),
     minRate: aiRecommendation.min_rate,
     maxRate: aiRecommendation.max_rate,
     optimalRate: blendedRate,
@@ -76,15 +99,20 @@ export async function generateRecommendation(): Promise<PricingRecommendation> {
     confidenceScore: aiRecommendation.confidence_score,
     reasoning: aiRecommendation.reasoning,
     marketPosition: determineMarketPosition(blendedRate, competitorRates),
-    seasonType,
+    seasonType: seasonType as PricingRecommendation['seasonType'],
     demandLevel: aiRecommendation.demand_level as PricingRecommendation['demandLevel'],
     weekendPremium: aiRecommendation.weekend_premium_percent,
     competitorRates,
   };
 
-  // 10. Store recommendation in database
+  // 14. Store recommendation in database
   const targetHotel = await prisma.hotel.findFirst({ where: { isTarget: true } });
   if (targetHotel) {
+    const validRates = competitorRates.filter(r => r.bestMapRate != null);
+    const avgCompRate = validRates.length > 0
+      ? validRates.reduce((sum, r) => sum + r.bestMapRate!, 0) / validRates.length
+      : null;
+
     await prisma.recommendation.create({
       data: {
         hotelId: targetHotel.id,
@@ -98,12 +126,14 @@ export async function generateRecommendation(): Promise<PricingRecommendation> {
         strategy: recommendation.strategy,
         confidenceScore: recommendation.confidenceScore,
         reasoning: recommendation.reasoning,
-        avgCompetitorRate: competitorRates.reduce((sum, r) => sum + (r.bestMapRate || 0), 0) / competitorRates.filter(r => r.bestMapRate).length,
+        avgCompetitorRate: avgCompRate,
         marketPosition: recommendation.marketPosition,
+        aiModel: MIMO_MODEL,
+        aiPromptVersion: '2.0',
+        rawAiResponse: JSON.stringify(aiRecommendation),
         seasonType,
         demandLevel: recommendation.demandLevel,
         weekendPremium: recommendation.weekendPremium,
-        rawAiResponse: JSON.stringify(aiRecommendation),
       },
     });
   }
@@ -111,9 +141,10 @@ export async function generateRecommendation(): Promise<PricingRecommendation> {
   return recommendation;
 }
 
-/**
- * Fetch latest competitor rates from snapshots
- */
+// ============================================================
+// DATA FETCHERS — All inject real DB data into AI prompts
+// ============================================================
+
 async function fetchCompetitorRates(date: Date): Promise<CompetitorRateSummary[]> {
   const hotels = await prisma.hotel.findMany({
     include: {
@@ -124,21 +155,24 @@ async function fetchCompetitorRates(date: Date): Promise<CompetitorRateSummary[]
     },
   });
 
-  return hotels.map(hotel => {
-    const snapshot = hotel.competitorSnapshots[0];
-    return {
-      hotelName: hotel.name,
-      bestMapRate: snapshot?.bestMapRate ?? null,
-      bestSource: snapshot?.bestSource ?? null,
-      delta: null, // Will be calculated after recommendation
-      position: hotel.role,
-    };
-  });
+  return hotels.map(hotel => ({
+    hotelName: hotel.name,
+    bestMapRate: hotel.competitorSnapshots[0]?.bestMapRate ?? null,
+    bestSource: hotel.competitorSnapshots[0]?.bestSource ?? null,
+    delta: null,
+    position: hotel.role,
+  }));
 }
 
-/**
- * Fetch historical data for trend analysis
- */
+async function fetchHkiCurrentRate(date: Date): Promise<number | null> {
+  const hki = await prisma.hotel.findFirst({ where: { isTarget: true } });
+  if (!hki) return null;
+  const snap = await prisma.competitorSnapshot.findFirst({
+    where: { hotelId: hki.id, date },
+  });
+  return snap?.bestMapRate ?? null;
+}
+
 async function fetchHistoricalData(): Promise<{
   avgRate: number | null;
   trend: 'rising' | 'falling' | 'stable';
@@ -149,15 +183,10 @@ async function fetchHistoricalData(): Promise<{
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  
   const thirtyDaysAgo = new Date(today.getTime() - 30 * 86400000);
 
-  // Get target hotel's historical rates
   const history = await prisma.rateHistory.findMany({
-    where: {
-      hotelId: targetHotel.id,
-      date: { gte: thirtyDaysAgo, lte: today },
-    },
+    where: { hotelId: targetHotel.id, date: { gte: thirtyDaysAgo, lte: today } },
     orderBy: { date: 'asc' },
   });
 
@@ -165,7 +194,6 @@ async function fetchHistoricalData(): Promise<{
     ? history.reduce((sum, h) => sum + (h.mapRate || 0), 0) / history.length
     : null;
 
-  // Determine trend
   let trend: 'rising' | 'falling' | 'stable' = 'stable';
   if (history.length >= 7) {
     const recent = history.slice(-7);
@@ -178,45 +206,90 @@ async function fetchHistoricalData(): Promise<{
     }
   }
 
-  // Get all hotels' trends
   const allHotels = await prisma.hotel.findMany();
-  const trends = [];
+  const trends = await Promise.all(
+    allHotels.map(async hotel => {
+      const hotelHistory = await prisma.rateHistory.findMany({
+        where: { hotelId: hotel.id, date: { gte: thirtyDaysAgo, lte: today }, mapRate: { not: null } },
+        orderBy: { date: 'asc' },
+      });
 
-  for (const hotel of allHotels) {
-    const hotelHistory = await prisma.rateHistory.findMany({
-      where: {
-        hotelId: hotel.id,
-        date: { gte: thirtyDaysAgo, lte: today },
-        mapRate: { not: null },
-      },
-      orderBy: { date: 'asc' },
-    });
+      if (hotelHistory.length < 2) return { hotel: hotel.name, delta7d: 0, delta30d: 0 };
 
-    if (hotelHistory.length < 2) {
-      trends.push({ hotel: hotel.name, delta7d: 0, delta30d: 0 });
-      continue;
-    }
+      const latest = hotelHistory[hotelHistory.length - 1].mapRate!;
+      const weekAgo = hotelHistory.find(h => {
+        const diff = today.getTime() - new Date(h.date).getTime();
+        return diff >= 6 * 86400000 && diff <= 8 * 86400000;
+      });
+      const monthAgo = hotelHistory[0];
 
-    const latest = hotelHistory[hotelHistory.length - 1].mapRate!;
-    const weekAgo = hotelHistory.find(h => {
-      const diff = today.getTime() - new Date(h.date).getTime();
-      return diff >= 6 * 86400000 && diff <= 8 * 86400000;
-    });
-    const monthAgo = hotelHistory[0];
-
-    trends.push({
-      hotel: hotel.name,
-      delta7d: weekAgo?.mapRate ? calcDeltaPercent(latest, weekAgo.mapRate) : 0,
-      delta30d: monthAgo?.mapRate ? calcDeltaPercent(latest, monthAgo.mapRate) : 0,
-    });
-  }
+      return {
+        hotel: hotel.name,
+        delta7d: weekAgo?.mapRate ? calcDeltaPercent(latest, weekAgo.mapRate) : 0,
+        delta30d: monthAgo?.mapRate ? calcDeltaPercent(latest, monthAgo.mapRate) : 0,
+      };
+    })
+  );
 
   return { avgRate, trend, trends };
 }
 
-/**
- * Algorithmic rate calculation based on competitor positioning
- */
+async function fetchOtaSpread(date: Date): Promise<Array<{ hotel: string; source: string; mapRate: number }>> {
+  const rates = await prisma.dailyRate.findMany({
+    where: { date, isAvailable: true, mapRate: { not: null } },
+    include: { hotel: { select: { name: true } } },
+    orderBy: { mapRate: 'asc' },
+  });
+
+  return rates
+    .filter(r => r.mapRate != null)
+    .map(r => ({
+      hotel: r.hotel.name,
+      source: r.source,
+      mapRate: r.mapRate!,
+    }))
+    .slice(0, 20);
+}
+
+async function fetchOccupancySignals(date: Date): Promise<Array<{ hotel: string; availability: string }>> {
+  const snapshots = await prisma.competitorSnapshot.findMany({
+    where: { date },
+    include: { hotel: { select: { name: true } } },
+  });
+
+  return snapshots
+    .filter(s => s.availability != null)
+    .map(s => ({
+      hotel: s.hotel.name,
+      availability: s.availability!,
+    }));
+}
+
+async function fetchRecentRecommendations(): Promise<Array<{ date: string; rate: number; strategy: string; confidence: number }>> {
+  const targetHotel = await prisma.hotel.findFirst({ where: { isTarget: true } });
+  if (!targetHotel) return [];
+
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+  const recs = await prisma.recommendation.findMany({
+    where: { hotelId: targetHotel.id, date: { gte: sevenDaysAgo } },
+    orderBy: { date: 'desc' },
+    take: 7,
+  });
+
+  return recs.map(r => ({
+    date: r.date.toISOString().split('T')[0],
+    rate: r.recommendedMapRate,
+    strategy: r.strategy,
+    confidence: r.confidenceScore,
+  }));
+}
+
+// ============================================================
+// ALGORITHMIC ENGINE — Real data, no hardcoded values
+// ============================================================
+
 function calculateAlgorithmicRate(
   competitors: CompetitorRateSummary[],
   seasonType: string,
@@ -226,8 +299,7 @@ function calculateAlgorithmicRate(
   let weightedSum = 0;
   let totalWeight = 0;
 
-  // Find competitor rates by name
-  const findRate = (partialName: string) => 
+  const findRate = (partialName: string) =>
     competitors.find(c => c.hotelName.toLowerCase().includes(partialName))?.bestMapRate;
 
   const carltonRate = findRate('carlton');
@@ -235,67 +307,38 @@ function calculateAlgorithmicRate(
   const sterlingRate = findRate('sterling');
   const lePosheRate = findRate('poshe');
 
-  // Apply positioning rules
   if (sterlingRate) {
-    // Target: 5-15% below Sterling
-    const target = sterlingRate * 0.90;
-    weightedSum += target * weights['sterling-kodai-lake'].weight;
+    weightedSum += sterlingRate * 0.90 * weights['sterling-kodai-lake'].weight;
     totalWeight += weights['sterling-kodai-lake'].weight;
   }
-
   if (lePosheRate) {
-    // Target: competitive with Le Poshe (±5%)
-    const target = lePosheRate * 1.02; // Slightly above Le Poshe
-    weightedSum += target * weights['le-poshe-by-sparsa'].weight;
+    weightedSum += lePosheRate * 1.02 * weights['le-poshe-by-sparsa'].weight;
     totalWeight += weights['le-poshe-by-sparsa'].weight;
   }
-
   if (carltonRate) {
-    // Target: 40-60% below Carlton
-    const target = carltonRate * 0.48;
-    weightedSum += target * weights['the-carlton'].weight;
+    weightedSum += carltonRate * 0.48 * weights['the-carlton'].weight;
     totalWeight += weights['the-carlton'].weight;
   }
-
   if (tamaraRate) {
-    // Target: 50-70% below Tamara
-    const target = tamaraRate * 0.38;
-    weightedSum += target * weights['the-tamara-kodai'].weight;
+    weightedSum += tamaraRate * 0.38 * weights['the-tamara-kodai'].weight;
     totalWeight += weights['the-tamara-kodai'].weight;
   }
 
   let baseRate = totalWeight > 0 ? weightedSum / totalWeight : 8000;
 
-  // Season adjustments
   const seasonMultipliers: Record<string, number> = {
-    peak: 1.18,
-    festival: 1.22,
-    shoulder: 1.05,
-    'off-peak': 0.88,
+    peak: 1.18, festival: 1.22, shoulder: 1.05, 'off-peak': 0.88,
   };
   baseRate *= seasonMultipliers[seasonType] ?? 1.0;
-
-  // Weekend premium
   if (weekend) baseRate *= 1.12;
 
-  // Ensure bounds
-  baseRate = Math.max(5000, Math.min(12000, Math.round(baseRate / 100) * 100));
-
-  return baseRate;
+  return Math.max(5000, Math.min(12000, Math.round(baseRate / 100) * 100));
 }
 
-/**
- * Blend algorithmic and AI recommendations
- */
 function blendRecommendations(algorithmic: number, ai: number): number {
-  // 60% AI weight, 40% algorithmic weight
-  const blended = (ai * 0.6) + (algorithmic * 0.4);
-  return Math.round(blended / 100) * 100; // Round to nearest 100
+  return Math.round(((ai * 0.6) + (algorithmic * 0.4)) / 100) * 100;
 }
 
-/**
- * Determine market position relative to competitors
- */
 function determineMarketPosition(
   rate: number,
   competitors: CompetitorRateSummary[]
@@ -305,17 +348,16 @@ function determineMarketPosition(
     .map(c => c.bestMapRate!);
 
   if (validRates.length === 0) return 'at-market';
-
-  const avgDirectCompetitor = validRates.reduce((a, b) => a + b, 0) / validRates.length;
-
-  if (rate < avgDirectCompetitor * 0.95) return 'below-market';
-  if (rate > avgDirectCompetitor * 1.05) return 'above-market';
+  const avg = validRates.reduce((a, b) => a + b, 0) / validRates.length;
+  if (rate < avg * 0.95) return 'below-market';
+  if (rate > avg * 1.05) return 'above-market';
   return 'at-market';
 }
 
-/**
- * Get the latest stored recommendation
- */
+// ============================================================
+// READ PATH — Latest stored recommendation
+// ============================================================
+
 export async function getLatestRecommendation(): Promise<PricingRecommendation | null> {
   const targetHotel = await prisma.hotel.findFirst({ where: { isTarget: true } });
   if (!targetHotel) return null;
@@ -324,10 +366,10 @@ export async function getLatestRecommendation(): Promise<PricingRecommendation |
     where: { hotelId: targetHotel.id },
     orderBy: { createdAt: 'desc' },
   });
-
   if (!rec) return null;
 
-  // Fetch competitor rates for context
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const competitorRates = await fetchCompetitorRates(rec.date);
 
   return {
