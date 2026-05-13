@@ -1,9 +1,10 @@
 // ============================================================
 // KodaiRateIQ — Tripadvisor Hotels Scraper
+// TripAdvisor IDs are stable numeric geo+detail codes.
 // ============================================================
 
 import { BaseScraper } from './base';
-import { classifyMealPlan, normalizeTaxInclusive } from '@/engine/map-classifier';
+import { classifyMealPlan } from '@/engine/map-classifier';
 import type { ScrapedRate } from '@/types';
 
 const TRIPADVISOR_IDS: Record<string, string> = {
@@ -13,6 +14,25 @@ const TRIPADVISOR_IDS: Record<string, string> = {
   'Sterling Kodai Lake':       'g659765-d3277695',
   'Le Poshe by Sparsa':        'g659765-d12868342',
 };
+
+const OFFER_SELS = [
+  '[data-automation="hotel-offer"]',
+  '[data-automation="hotel-offers-list"] li',
+  '[class*="offer-item"]',
+  '[class*="OfferItem"]',
+  '[class*="partnerOffer"]',
+  '[class*="offerRow"]',
+];
+
+const PRICE_SELS = [
+  '[data-automation="offer-price"]',
+  '[class*="offer-price"]',
+  '[class*="offerPrice"]',
+  '[data-automation="property-price"]',
+  '[class*="price"]',
+  'span[class*="price"]',
+  'div[class*="price"]',
+];
 
 export class TripadvisorScraper extends BaseScraper {
   get source(): string { return 'tripadvisor'; }
@@ -28,78 +48,108 @@ export class TripadvisorScraper extends BaseScraper {
       const ci = this.formatDate(checkIn);
       const co = this.formatDate(checkOut);
 
+      // Use .in domain for India-specific results and better INR pricing
       const url = `https://www.tripadvisor.in/Hotel_Review-${id}-Reviews.html?checkin=${ci}&checkout=${co}&adults=2`;
 
+      console.log(`[tripadvisor] navigating hotel=${hotelName}`);
       await this.navigate(page, url);
 
-      // Dismiss overlays
-      try {
-        const closeBtn = page.locator('[class*="dismiss"], [aria-label="Close"]').first();
-        if (await closeBtn.isVisible({ timeout: 2000 })) await closeBtn.click();
-      } catch { /* none */ }
-
-      // Tripadvisor shows partner prices in a "Check availability" panel
-      const partnerCards = await page.$$('[data-automation="hotel-offers-list"] [data-automation="hotel-offer"]');
-
-      for (const card of partnerCards) {
+      // Dismiss overlays / cookie consent
+      for (const closeSel of [
+        '[class*="dismiss"]',
+        '[aria-label="Close"]',
+        'button[class*="close"]',
+        '#onetrust-accept-btn-handler',
+      ]) {
         try {
-          const priceEl = await card.$('[data-automation="offer-price"]');
-          const priceText = await priceEl?.textContent();
-          const price = this.extractPrice(priceText || '');
+          const btn = page.locator(closeSel).first();
+          if (await btn.isVisible({ timeout: 1500 })) { await btn.click(); break; }
+        } catch { /* none */ }
+      }
 
-          const partnerEl = await card.$('[data-automation="offer-provider"]');
-          const partnerName = (await partnerEl?.textContent())?.trim().toLowerCase() || '';
+      // Wait for offer/price widgets to render
+      const offerSel = OFFER_SELS.join(', ');
+      await this.waitForSelector(page, offerSel, 20000);
 
-          const inclEl = await card.$('[data-automation="offer-inclusions"]');
+      // Try structured offer cards
+      let offerCards: Array<import('playwright').ElementHandle> = [];
+      for (const sel of OFFER_SELS) {
+        const cards = await page.$$(sel);
+        if (cards.length > 0) { offerCards = cards; break; }
+      }
+
+      for (const card of offerCards.slice(0, 8)) {
+        try {
+          let price: number | null = null;
+          let priceText = '';
+          for (const priceSel of PRICE_SELS) {
+            const el = await card.$(priceSel);
+            priceText = (await el?.textContent()) || '';
+            if (priceText.trim()) {
+              price = this.extractPrice(priceText);
+              if (price && price > 50) break;
+            }
+          }
+
+          const partnerEl = await card.$('[data-automation="offer-provider"], [class*="provider"], [class*="partner"]');
+          const partnerName = (await partnerEl?.textContent())?.trim().toLowerCase() || 'partner';
+
+          const inclEl = await card.$('[data-automation="offer-inclusions"], [class*="inclusion"]');
           const inclText = (await inclEl?.textContent())?.toLowerCase() || '';
 
-          if (price && price > 1000) {
+          if (price && price > 50) {
+            const hasRupee = priceText.includes('₹') || priceText.includes('INR');
+            const inrPrice = this.normalizeToInr(price, hasRupee);
+            if (inrPrice < 500 || inrPrice > 500000) continue;
+
             const meal = classifyMealPlan(inclText);
             if (meal.shouldReject) continue;
 
-            // Tripadvisor typically shows tax-inclusive prices
             rates.push({
-              hotelName,
-              roomType: 'Best Available',
-              mapRate: meal.isMapEligible ? price : null,
-              cpRate: meal.plan === 'CP' ? price : null,
-              epRate: meal.plan === 'EP' || meal.plan === 'UNKNOWN' ? price : null,
-              taxPercent: 18,
-              taxInclusive: true,
-              totalWithTax: price,
+              hotelName, roomType: 'Best Available',
+              mapRate: meal.isMapEligible ? inrPrice : null,
+              cpRate: meal.plan === 'CP' ? inrPrice : null,
+              epRate: meal.plan === 'EP' || meal.plan === 'UNKNOWN' ? inrPrice : null,
+              taxPercent: 18, taxInclusive: true, totalWithTax: inrPrice,
               source: `tripadvisor/${partnerName || 'partner'}`,
-              sourceUrl: url,
-              isAvailable: true,
-              breakfastIncluded: meal.breakfastIncluded,
-              dinnerIncluded: meal.dinnerIncluded,
-              lunchIncluded: meal.lunchIncluded,
-              mealDetails: inclText || undefined,
-              freeCancellation: inclText.includes('free cancel'),
-              hasDiscount: false,
-              occupancy: 2,
-              scrapedAt: new Date(),
-              confidence: meal.confidence * 0.78,
+              sourceUrl: url, isAvailable: true,
+              breakfastIncluded: meal.breakfastIncluded, dinnerIncluded: meal.dinnerIncluded,
+              lunchIncluded: meal.lunchIncluded, mealDetails: inclText || undefined,
+              freeCancellation: inclText.includes('free cancel'), hasDiscount: false,
+              occupancy: 2, scrapedAt: new Date(), confidence: meal.confidence * 0.78,
             });
           }
         } catch { /* skip */ }
       }
 
-      // Fallback: look for "from" price on main page
+      // Fallback: generic price scan across the page
       if (rates.length === 0) {
-        const priceEl = await page.$('[data-automation="property-price"]');
-        const price = this.extractPrice((await priceEl?.textContent()) || '');
-        if (price && price > 1000) {
-          rates.push({
-            hotelName, roomType: 'Best Available',
-            mapRate: null, cpRate: null, epRate: price,
-            taxPercent: 18, taxInclusive: true, totalWithTax: price,
-            source: this.source, sourceUrl: url, isAvailable: true,
-            breakfastIncluded: false, dinnerIncluded: false, lunchIncluded: false,
-            freeCancellation: false, hasDiscount: false,
-            occupancy: 2, scrapedAt: new Date(), confidence: 0.55,
-          });
+        for (const priceSel of PRICE_SELS) {
+          const priceEls = await page.$$(priceSel);
+          for (const el of priceEls.slice(0, 5)) {
+            const priceText = (await el.textContent()) || '';
+            const price = this.extractPrice(priceText);
+            if (price && price > 50) {
+              const hasRupee = priceText.includes('₹') || priceText.includes('INR');
+              const inrPrice = this.normalizeToInr(price, hasRupee);
+              if (inrPrice >= 500 && inrPrice <= 500000) {
+                rates.push({
+                  hotelName, roomType: 'Best Available',
+                  mapRate: null, cpRate: null, epRate: inrPrice,
+                  taxPercent: 18, taxInclusive: true, totalWithTax: inrPrice,
+                  source: this.source, sourceUrl: url, isAvailable: true,
+                  breakfastIncluded: false, dinnerIncluded: false, lunchIncluded: false,
+                  freeCancellation: false, hasDiscount: false,
+                  occupancy: 2, scrapedAt: new Date(), confidence: 0.50,
+                });
+                break;
+              }
+            }
+          }
+          if (rates.length > 0) break;
         }
       }
+
       if (rates.length === 0) {
         const evalPrices = await this.evaluatePrices(page);
         if (evalPrices.length > 0) {
@@ -110,12 +160,14 @@ export class TripadvisorScraper extends BaseScraper {
             source: this.source, sourceUrl: url, isAvailable: true,
             breakfastIncluded: false, dinnerIncluded: false, lunchIncluded: false,
             freeCancellation: false, hasDiscount: false,
-            occupancy: 2, scrapedAt: new Date(), confidence: 0.45,
+            occupancy: 2, scrapedAt: new Date(), confidence: 0.40,
           });
         }
       }
+
+      console.log(`[tripadvisor] ${hotelName}: extracted ${rates.length} rates`);
     } catch (err) {
-      console.error(`[tripadvisor] Failed for ${hotelName}:`, err);
+      console.error(`[tripadvisor] Failed for ${hotelName}:`, (err as Error).message);
       throw err;
     } finally {
       await page.close();

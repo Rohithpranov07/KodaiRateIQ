@@ -1,22 +1,10 @@
 // ============================================================
 // ⚠️  TEMPORARY DEBUG ROUTE — REMOVE BEFORE GA LAUNCH
 //
-// GET /api/debug/run-scrape
+// GET /api/debug/run-scrape?secret=<CRON_SECRET>
 //
-// Manually triggers the full OTA scraping pipeline:
-//   1. Scrapes all 13 OTA sources for all 5 hotels
-//   2. Cross-verifies MAP rates → selects lowest verified BAR
-//   3. Writes DailyRate, CompetitorSnapshot, OtaBarAudit to Supabase
-//   4. Updates RateHistory with day-over-day deltas
-//   5. Generates AI pricing recommendation
-//   6. Returns a detailed JSON report
-//
-// Auth: ?secret=<CRON_SECRET> (required in production)
-//
-// Usage:
-//   curl "https://<host>/api/debug/run-scrape?secret=<CRON_SECRET>"
-//
-// TO REMOVE: delete src/app/api/debug/ entirely
+// Manually triggers the full OTA scraping pipeline and returns
+// a detailed JSON report with per-source diagnostics.
 // ============================================================
 
 import { NextResponse } from 'next/server';
@@ -27,14 +15,13 @@ import { verifyTodaysRates } from '@/engine/verification';
 
 export const dynamic   = 'force-dynamic';
 export const revalidate = 0;
-export const maxDuration = 300; // 5 min — scraping is slow
+export const maxDuration = 300;
 
 export async function GET(request: Request) {
   const start = Date.now();
   const { searchParams } = new URL(request.url);
   const secret = searchParams.get('secret');
 
-  // ── Auth guard ──────────────────────────────────────────────
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret && secret !== cronSecret) {
     console.warn('[debug/run-scrape] Unauthorised attempt');
@@ -79,12 +66,19 @@ export async function GET(request: Request) {
     log(`  Total rates found  : ${scrapeReport.totalRates}`);
     log(`  MAP rates found    : ${scrapeReport.mapRates}`);
     log(`  Successful sources : ${scrapeReport.successfulSources}`);
+    log(`  Zero-rate sources  : ${scrapeReport.zeroRateSources}`);
     log(`  Failed sources     : ${scrapeReport.failedSources}`);
     log(`  Duration           : ${(scrapeReport.duration / 1000).toFixed(1)}s`);
-    log(`  Scrape window      : ${scrapeReport.scrapeWindow}`);
     log(`  Verified hotels    : ${scrapeReport.verification.verifiedHotels}`);
     log(`  Avg confidence     : ${(scrapeReport.verification.avgConfidence * 100).toFixed(0)}%`);
-    log(`  Anomalies flagged  : ${scrapeReport.verification.anomalyCount}`);
+
+    if (scrapeReport.warnings.length > 0) {
+      for (const w of scrapeReport.warnings) log(`  ⚠ WARNING: ${w}`);
+    }
+
+    if (scrapeReport.totalRates === 0) {
+      log('  ⛔ CRITICAL: Zero rates extracted — see sourceDiagnostics for root cause');
+    }
 
     if (Object.keys(scrapeReport.verification.otaWinners).length > 0) {
       log('  OTA winners this cycle:');
@@ -93,11 +87,10 @@ export async function GET(request: Request) {
       }
     }
 
-    if (scrapeReport.staleStatus.staleHotels.length > 0) {
-      log(`  ⚠ Stale hotels: ${scrapeReport.staleStatus.staleHotels.join(', ')}`);
-    }
-    if (scrapeReport.staleStatus.degradedHotels.length > 0) {
-      log(`  ⚠ Degraded hotels: ${scrapeReport.staleStatus.degradedHotels.join(', ')}`);
+    for (const h of scrapeReport.sourceHealth) {
+      if (h.selectorHealth === 'degraded' || h.selectorHealth === 'failed') {
+        log(`  ⚠ ${h.source}: selectorHealth=${h.selectorHealth} captcha=${h.captchaDetected} rates=${h.pricesFound}`);
+      }
     }
   } catch (err: any) {
     log(`Step 1 ✗ Scrape pipeline threw: ${err.message}`);
@@ -122,24 +115,24 @@ export async function GET(request: Request) {
   let snapshotsWritten = 0;
 
   try {
-    ratesSaved = await prisma.dailyRate.count({
-      where: { date: { gte: today, lt: tomorrow } },
-    });
-    hotelsInDB = await prisma.hotel.count();
-    snapshotsWritten = await prisma.competitorSnapshot.count({
-      where: { date: { gte: today, lt: tomorrow } },
-    });
+    ratesSaved       = await prisma.dailyRate.count({ where: { date: { gte: today, lt: tomorrow } } });
+    hotelsInDB       = await prisma.hotel.count();
+    snapshotsWritten = await prisma.competitorSnapshot.count({ where: { date: { gte: today, lt: tomorrow } } });
 
     log(`Step 2 ✓ DB readback`);
     log(`  DailyRate rows today : ${ratesSaved}`);
     log(`  Hotels in DB         : ${hotelsInDB}`);
     log(`  Snapshots written    : ${snapshotsWritten}`);
+
+    if (ratesSaved === 0 && scrapeReport.totalRates > 0) {
+      log('  ⛔ CRITICAL: rates found but 0 saved — likely DB write error');
+    }
   } catch (err: any) {
     log(`Step 2 ⚠ DB readback failed (non-fatal): ${err.message}`);
   }
 
   // ── Step 3: Per-hotel verified BAR summary ───────────────────
-  log('Step 3 — fetching per-hotel verified BAR from CompetitorSnapshot...');
+  log('Step 3 — fetching per-hotel verified BAR...');
   const hotelBarSummary: Array<{
     name: string; bar: number | null; source: string | null; confidence: string; otas: number;
   }> = [];
@@ -148,11 +141,8 @@ export async function GET(request: Request) {
     const verification = await verifyTodaysRates();
     for (const r of verification.results) {
       hotelBarSummary.push({
-        name:       r.hotelName,
-        bar:        r.verifiedMapRate,
-        source:     r.bestSource,
-        confidence: r.confidenceLabel,
-        otas:       r.sourceCount,
+        name: r.hotelName, bar: r.verifiedMapRate, source: r.bestSource,
+        confidence: r.confidenceLabel, otas: r.sourceCount,
       });
       const fmt = (n: number | null) => n ? `₹${n.toLocaleString('en-IN')}` : 'N/A';
       log(`  ${r.hotelName}`);
@@ -169,69 +159,87 @@ export async function GET(request: Request) {
 
   try {
     const rec = await generateRecommendation();
-    recommendation = {
-      rate:       rec.recommendedMapRate,
-      strategy:   rec.strategy,
-      confidence: rec.confidenceScore,
-    };
-    log(`Step 4 ✓ AI recommendation generated`);
-    log(`  Recommended MAP : ₹${rec.recommendedMapRate.toLocaleString('en-IN')}`);
-    log(`  Strategy        : ${rec.strategy}`);
-    log(`  Confidence      : ${(rec.confidenceScore * 100).toFixed(0)}%`);
-    log(`  Demand level    : ${rec.demandLevel ?? '—'}`);
-    log(`  Season          : ${rec.seasonType ?? '—'}`);
+    recommendation = { rate: rec.recommendedMapRate, strategy: rec.strategy, confidence: rec.confidenceScore };
+    log(`Step 4 ✓ AI recommendation: ₹${rec.recommendedMapRate.toLocaleString('en-IN')} (${rec.strategy})`);
   } catch (err: any) {
     log(`Step 4 ⚠ AI recommendation failed (non-fatal): ${err.message}`);
-    // Non-fatal — rates are still saved even if AI fails
   }
 
   const totalDuration = Date.now() - start;
   log('══════════════════════════════════════════════════');
-  log(`DEBUG RUN-SCRAPE — pipeline complete in ${(totalDuration / 1000).toFixed(1)}s`);
+  log(`DEBUG RUN-SCRAPE — complete in ${(totalDuration / 1000).toFixed(1)}s`);
   log('══════════════════════════════════════════════════');
 
-  // ── Response ─────────────────────────────────────────────────
+  // Build enhanced per-source diagnostics for the response
+  const enhancedDiagnostics = (scrapeReport.sourceDiagnostics ?? []).map(d => ({
+    source: d.source,
+    hotelName: d.hotelName,
+    hotelCardsFound: d.ratesExtracted > 0 ? d.ratesExtracted : 0,
+    priceNodesFound: d.samplePrices.length,
+    captchaDetected: d.botBlocked,
+    blockReason: d.blockReason,
+    samplePrices: d.samplePrices,
+    finalUrl: d.source,
+    pageTitle: d.pageTitle,
+    htmlSize: d.htmlSize,
+    bodyTextLength: d.bodyTextLength,
+    hasPriceSymbol: d.hasPriceSymbol,
+    navigationMs: d.navigationMs,
+    ratesExtracted: d.ratesExtracted,
+    selectorHealth: d.ratesExtracted > 0 ? 'healthy' : d.botBlocked ? 'blocked' : 'degraded',
+  }));
+
   return NextResponse.json({
-    // ⚠️ TEMPORARY DEBUG ROUTE
-    _warning: 'This is a temporary debug endpoint. Remove before production launch.',
+    _warning: 'Temporary debug endpoint. Remove before production launch.',
 
     success: true,
     durationMs: totalDuration,
 
+    // Flat top-level fields matching expected output format
+    hotelsScraped:        scrapeReport.successfulSources,
+    sourcesFailed:        scrapeReport.failedSources,
+    zeroRateSources:      scrapeReport.zeroRateSources,
+    totalRatesFound:      scrapeReport.totalRates,
+    mapRatesFound:        scrapeReport.mapRates,
+    ratesSavedToSupabase: ratesSaved,
+    verifiedHotels:       scrapeReport.verification.verifiedHotels,
+
     pipeline: {
-      hotelsScraped:             scrapeReport.successfulSources,
-      sourcesFailed:             scrapeReport.failedSources,
-      totalRatesFound:           scrapeReport.totalRates,
-      mapRatesFound:             scrapeReport.mapRates,
-      ratesSavedToSupabase:      ratesSaved,
+      hotelsScraped:        scrapeReport.successfulSources,
+      sourcesFailed:        scrapeReport.failedSources,
+      zeroRateSources:      scrapeReport.zeroRateSources,
+      totalRatesFound:      scrapeReport.totalRates,
+      mapRatesFound:        scrapeReport.mapRates,
+      ratesSavedToSupabase: ratesSaved,
       snapshotsWritten,
-      hotelsInDatabase:          hotelsInDB,
-      verifiedHotels:            scrapeReport.verification.verifiedHotels,
-      avgConfidencePct:          Math.round(scrapeReport.verification.avgConfidence * 100),
-      anomaliesDetected:         scrapeReport.verification.anomalyCount,
-      otaWinners:                scrapeReport.verification.otaWinners,
+      hotelsInDatabase:     hotelsInDB,
+      verifiedHotels:       scrapeReport.verification.verifiedHotels,
+      avgConfidencePct:     Math.round(scrapeReport.verification.avgConfidence * 100),
+      anomaliesDetected:    scrapeReport.verification.anomalyCount,
+      otaWinners:           scrapeReport.verification.otaWinners,
     },
 
     hotelBarSummary,
-
     recommendation,
-
     staleStatus: scrapeReport.staleStatus,
+    warnings: scrapeReport.warnings,
 
-    recommendationsGenerated: recommendation ? 1 : 0,
+    // Per-source health (one entry per OTA, not per hotel)
+    sourceHealth: scrapeReport.sourceHealth,
 
-    // ── Per-source diagnostics: tells you exactly why each OTA returned 0 rates ──
-    sourceDiagnostics: scrapeReport.sourceDiagnostics ?? [],
-    blockSummary: scrapeReport.blockSummary ?? {},
+    // Per-navigation diagnostics (one entry per hotel × OTA combination)
+    sourceDiagnostics: enhancedDiagnostics,
+
+    blockSummary: scrapeReport.blockSummary,
+
     diagnosticSummary: {
-      totalNavigations: (scrapeReport.sourceDiagnostics ?? []).length,
-      botBlockedCount:  (scrapeReport.sourceDiagnostics ?? []).filter(d => d.botBlocked).length,
-      pagesWithPrices:  (scrapeReport.sourceDiagnostics ?? []).filter(d => d.hasPriceSymbol).length,
-      avgHtmlSize: (scrapeReport.sourceDiagnostics ?? []).length > 0
-        ? Math.round(
-            (scrapeReport.sourceDiagnostics ?? []).reduce((s, d) => s + d.htmlSize, 0) /
-            (scrapeReport.sourceDiagnostics ?? []).length
-          )
+      totalNavigations:  enhancedDiagnostics.length,
+      botBlockedCount:   enhancedDiagnostics.filter(d => d.captchaDetected).length,
+      pagesWithPrices:   enhancedDiagnostics.filter(d => d.hasPriceSymbol).length,
+      healthySelectors:  enhancedDiagnostics.filter(d => d.selectorHealth === 'healthy').length,
+      degradedSelectors: enhancedDiagnostics.filter(d => d.selectorHealth === 'degraded').length,
+      avgHtmlSize: enhancedDiagnostics.length > 0
+        ? Math.round(enhancedDiagnostics.reduce((s, d) => s + d.htmlSize, 0) / enhancedDiagnostics.length)
         : 0,
     },
 

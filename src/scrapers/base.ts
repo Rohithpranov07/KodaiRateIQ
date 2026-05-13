@@ -18,11 +18,12 @@ const BOT_INDICATORS = [
   'sorry, you have been blocked', 'attention required',
   'security check', 'ddos-guard', 'are you a bot',
   'please wait while we check', 'browser check',
+  'please complete the security check',
 ];
 
-// Minimum page sizes to consider a page real (not bot-blocked)
-const MIN_HTML_BYTES = 8000;
-const MIN_BODY_CHARS = 400;
+// Reduced thresholds — original 8000/400 were too strict for SPA shells
+const MIN_HTML_BYTES = 3000;
+const MIN_BODY_CHARS = 150;
 
 const RETRYABLE_ERRORS = [
   'ERR_NAME_NOT_RESOLVED',
@@ -57,7 +58,7 @@ export class BotBlockedError extends Error {
 }
 
 function isRetryable(err: Error): boolean {
-  if (err.name === 'BotBlockedError') return false;  // Never retry bot blocks — wastes time
+  if (err.name === 'BotBlockedError') return false;
   if (err.message.startsWith('PAGE_TOO_SMALL:')) return false;
   return RETRYABLE_ERRORS.some(pat => err.message.includes(pat));
 }
@@ -66,12 +67,20 @@ function isBrowserFatal(err: Error): boolean {
   return BROWSER_FATAL_ERRORS.some(pat => err.message.includes(pat));
 }
 
-const CHROME_UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+// Rotate through multiple realistic User-Agent strings to reduce fingerprinting
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+];
+
+function randomUA(): string {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
 
 // ── Browser singleton ─────────────────────────────────────────
-// Browser process is shared; each execute() call gets its own BrowserContext
-// so a reset or failure in one scraper never kills concurrent scrapers.
 class BrowserManager {
   private static instance: BrowserManager | null = null;
   private browser: Browser | null = null;
@@ -87,7 +96,6 @@ class BrowserManager {
     if (this.launchPromise) return this.launchPromise;
 
     this.launchPromise = (async () => {
-      // Dynamic requires — never evaluated during Next.js build phase
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { chromium } = require('playwright-extra');
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -104,6 +112,9 @@ class BrowserManager {
           '--disable-http2',
           '--disable-blink-features=AutomationControlled',
           '--disable-features=IsolateOrigins,site-per-process',
+          '--disable-web-security',
+          '--window-size=1366,768',
+          '--lang=en-IN',
         ],
       });
 
@@ -122,23 +133,32 @@ class BrowserManager {
 
   async newContext(): Promise<BrowserContext> {
     const browser = await this.getBrowser();
+    const ua = randomUA();
     const ctx = await browser.newContext({
-      userAgent: CHROME_UA,
+      userAgent: ua,
       viewport: { width: 1366, height: 768 },
       locale: 'en-IN',
       timezoneId: 'Asia/Kolkata',
       extraHTTPHeaders: {
         'accept-language': 'en-IN,en;q=0.9,hi;q=0.8',
-        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'accept-encoding': 'gzip, deflate, br',
+        'sec-ch-ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'upgrade-insecure-requests': '1',
       },
     });
 
-    await ctx.route('**/*.{png,jpg,jpeg,gif,svg,woff,woff2,ttf,eot,ico}', r => r.abort());
+    // Block heavy assets that add no value to scraping
+    await ctx.route('**/*.{png,jpg,jpeg,gif,svg,woff,woff2,ttf,eot,ico,mp4,webp}', r => r.abort());
     await ctx.route('**/analytics**', r => r.abort());
     await ctx.route('**/tracking**', r => r.abort());
     await ctx.route('**/ads/**', r => r.abort());
     await ctx.route('**/gtm.js**', r => r.abort());
     await ctx.route('**/fbevents**', r => r.abort());
+    await ctx.route('**/hotjar**', r => r.abort());
+    await ctx.route('**/intercom**', r => r.abort());
 
     return ctx;
   }
@@ -156,14 +176,13 @@ export const browserManager = BrowserManager.getInstance();
 export abstract class BaseScraper {
   protected config: ScraperConfig;
   private _context: BrowserContext | null = null;
-  // Set by navigate() — readable by execute() to attach to ScrapeResult
   protected _lastDiag: ScraperDiagnostics | null = null;
 
   constructor(config?: Partial<ScraperConfig>) {
     this.config = {
       maxRetries: config?.maxRetries ?? 3,
       retryDelay: config?.retryDelay ?? 2000,
-      timeout: config?.timeout ?? 60000,
+      timeout: config?.timeout ?? 90000,
       headless: config?.headless ?? true,
       userAgents: config?.userAgents ?? [],
       rateLimit: config?.rateLimit ?? 10,
@@ -176,36 +195,58 @@ export abstract class BaseScraper {
   protected async newPage(): Promise<Page> {
     if (!this._context) throw new Error('No browser context — call execute() first');
     const page = await this._context.newPage();
-    page.setDefaultTimeout(30000);
-    page.setDefaultNavigationTimeout(60000);
+    page.setDefaultTimeout(45000);
+    page.setDefaultNavigationTimeout(90000);
     await page.addInitScript(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => false });
       Object.defineProperty(navigator, 'plugins',   { get: () => [1, 2, 3, 4, 5] });
       Object.defineProperty(navigator, 'languages', { get: () => ['en-IN', 'en-US', 'en'] });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window as any).chrome = { runtime: {}, loadTimes: () => ({}), csi: () => ({}) };
+      // Spoof screen dimensions to look more realistic
+      Object.defineProperty(screen, 'width',  { get: () => 1366 });
+      Object.defineProperty(screen, 'height', { get: () => 768 });
     });
     return page;
   }
 
-  // Navigate, wait for content, then collect full page diagnostics.
-  // Throws BotBlockedError if the page is clearly a challenge page — non-retryable.
+  // Navigate and wait for real JS-rendered content.
+  // Uses a multi-phase wait: domcontentloaded → networkidle → scroll → extra buffer.
+  // Throws BotBlockedError on challenge pages.
   protected async navigate(page: Page, url: string): Promise<void> {
-    await page.waitForTimeout(1500 + Math.random() * 3000);
+    // Human-like pre-navigation delay
+    await page.waitForTimeout(1000 + Math.random() * 2500);
 
     const navStart = Date.now();
     try {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-      // Let network settle up to 8s (caps on long-polling sites)
-      await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => null);
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
     } catch (e: any) {
       if (e?.message?.includes('Timeout') || e?.message?.includes('exceeded')) {
-        // Already on domcontentloaded, just give JS time to render
-        await page.waitForTimeout(3000);
+        // Already partially loaded — continue extraction
+        await page.waitForTimeout(2000);
       } else {
         throw e;
       }
     }
+
+    // Phase 2: wait for network to settle — most AJAX calls should complete by 30s
+    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => null);
+
+    // Phase 3: scroll to trigger lazy-loaded room cards and price components
+    try {
+      await page.evaluate(() => window.scrollTo(0, 400));
+      await page.waitForTimeout(1500);
+      await page.evaluate(() => window.scrollTo(0, 900));
+      await page.waitForTimeout(1000);
+      await page.evaluate(() => window.scrollTo(0, 1600));
+      await page.waitForTimeout(1000);
+      // Scroll back to top to expose any sticky price bars
+      await page.evaluate(() => window.scrollTo(0, 0));
+    } catch { /* ignore scroll errors */ }
+
+    // Phase 4: additional buffer for React hydration / price widget renders
+    await page.waitForTimeout(4000 + Math.random() * 4000);
+
     const navigationMs = Date.now() - navStart;
 
     // ── Collect page diagnostics ──────────────────────────────
@@ -222,7 +263,7 @@ export abstract class BaseScraper {
     } catch { /* ignore */ }
     try {
       bodyText = await page.evaluate(
-        () => (document.body?.innerText || '').substring(0, 3000)
+        () => (document.body?.innerText || '').substring(0, 5000)
       );
     } catch { /* ignore */ }
 
@@ -250,10 +291,12 @@ export abstract class BaseScraper {
       blockReason = `body_too_small:${bodyTextLength}chars`;
     }
 
-    // Extract sample prices from raw body text
-    const priceMatches = bodyText.match(/(?:₹|INR|Rs\.?)\s*([\d,]+)/g) || [];
+    // Extract sample prices from raw body text (multi-currency)
+    const priceMatches = bodyText.match(/(?:₹|INR|Rs\.?|\$|€|£|USD)\s*([\d,]+)/g) || [];
     const samplePrices = priceMatches.slice(0, 8);
-    const hasPriceSymbol = priceMatches.length > 0 || bodyText.includes('₹') || bodyText.includes('INR');
+    const hasPriceSymbol = priceMatches.length > 0 ||
+      bodyText.includes('₹') || bodyText.includes('INR') ||
+      bodyText.includes('per night') || bodyText.includes('/night');
 
     this._lastDiag = {
       source: this.source,
@@ -266,14 +309,13 @@ export abstract class BaseScraper {
       hasPriceSymbol,
       botBlocked,
       blockReason,
-      sampleBodyText: bodyText.substring(0, 500).replace(/\n+/g, ' '),
+      sampleBodyText: bodyText.substring(0, 600).replace(/\n+/g, ' '),
       samplePrices,
       navigationMs,
       ratesExtracted: 0,
       screenshotPath: null,
     };
 
-    // Always log — visible in Railway logs for every navigation
     console.log(JSON.stringify({
       event: 'PAGE_DIAG',
       source: this.source,
@@ -286,12 +328,13 @@ export abstract class BaseScraper {
       blockReason,
       navigationMs,
       samplePrices: samplePrices.slice(0, 5),
+      sampleBodyText: bodyText.substring(0, 150).replace(/\n+/g, ' '),
     }));
 
     if (botBlocked) {
       const art = await this.captureDebugArtifacts(page, this.source, blockReason ?? 'blocked');
       if (art.screenshotPath) this._lastDiag.screenshotPath = art.screenshotPath;
-      console.warn(`[${this.source}] BOT_BLOCK detected — ${blockReason} — html=${htmlSize}B title="${pageTitle.substring(0, 60)}"`);
+      console.warn(`[${this.source}] BOT_BLOCK — ${blockReason} — html=${htmlSize}B title="${pageTitle.substring(0, 60)}"`);
       throw new BotBlockedError(blockReason!, `html=${htmlSize}B,title=${pageTitle.substring(0, 50)}`);
     }
   }
@@ -311,31 +354,94 @@ export abstract class BaseScraper {
       result.screenshotPath = screenshotPath;
       const htmlPath = path.join(DEBUG_DIR, `${safe}-${safeLabel}-${ts}.html`);
       fs.writeFileSync(htmlPath, await page.content());
-      console.log(`[${source}] debug artifacts: ${screenshotPath}`);
-    } catch { /* /tmp might not be writable in all envs */ }
+      console.log(`[${source}] debug artifacts saved: ${screenshotPath}`);
+    } catch { /* /tmp might not be writable */ }
     return result;
   }
 
-  // Universal price scanner via raw innerText — independent of CSS selectors.
-  // Used as the ultimate fallback when structured selectors return nothing.
+  // Multi-currency price scanner via raw innerText.
+  // INR prices are returned as-is. USD/EUR/GBP prices are converted to INR.
+  // Used as ultimate fallback when structured selectors find nothing.
   protected async evaluatePrices(page: Page): Promise<number[]> {
     try {
       return await page.evaluate(() => {
         const text = (document.body?.innerText || '') + ' ' + (document.body?.textContent || '');
         const found: number[] = [];
-        const p1 = text.match(/(?:₹|INR|Rs\.?)\s*([\d,]+)/g) || [];
-        for (const m of p1) {
+
+        // INR prices (₹, INR, Rs.)
+        const inrMatches = text.match(/(?:₹|INR|Rs\.?)\s*([\d,]+)/g) || [];
+        for (const m of inrMatches) {
           const n = parseInt(m.replace(/[^0-9]/g, ''), 10);
           if (n >= 1500 && n <= 300000) found.push(n);
         }
-        const p2 = text.match(/[\d,]{4,7}(?:\s*(?:per night|\/night|nett|net rate|room rate))/gi) || [];
-        for (const m of p2) {
-          const n = parseInt(m.replace(/[^0-9]/g, ''), 10);
-          if (n >= 1500 && n <= 300000) found.push(n);
+
+        // USD prices ($) — convert to INR @ 84 (approximate)
+        if (found.length === 0) {
+          const usdMatches = text.match(/\$\s*([\d,]+(?:\.\d{1,2})?)/g) || [];
+          for (const m of usdMatches) {
+            const n = parseFloat(m.replace(/[^0-9.]/g, ''));
+            if (n >= 30 && n <= 5000) found.push(Math.round(n * 84));
+          }
         }
+
+        // EUR prices (€) — convert @ 90
+        if (found.length === 0) {
+          const eurMatches = text.match(/€\s*([\d,]+(?:\.\d{1,2})?)/g) || [];
+          for (const m of eurMatches) {
+            const n = parseFloat(m.replace(/[^0-9.]/g, ''));
+            if (n >= 30 && n <= 5000) found.push(Math.round(n * 90));
+          }
+        }
+
+        // GBP prices (£) — convert @ 107
+        if (found.length === 0) {
+          const gbpMatches = text.match(/£\s*([\d,]+(?:\.\d{1,2})?)/g) || [];
+          for (const m of gbpMatches) {
+            const n = parseFloat(m.replace(/[^0-9.]/g, ''));
+            if (n >= 25 && n <= 4000) found.push(Math.round(n * 107));
+          }
+        }
+
+        // "per night" context numbers — last resort
+        if (found.length === 0) {
+          const p2 = text.match(/[\d,]{4,7}(?:\s*(?:per night|\/night|nett|net rate|room rate))/gi) || [];
+          for (const m of p2) {
+            const n = parseInt(m.replace(/[^0-9]/g, ''), 10);
+            if (n >= 1500 && n <= 300000) found.push(n);
+          }
+        }
+
         return [...new Set(found)].sort((a, b) => a - b);
       });
     } catch { return []; }
+  }
+
+  // Wait for a selector to appear with a timeout, returning true/false
+  protected async waitForSelector(page: Page, selector: string, timeoutMs = 15000): Promise<boolean> {
+    try {
+      await page.waitForSelector(selector, { timeout: timeoutMs });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Extract price from text — strips all non-numeric characters then parses.
+  // Returns the numeric value regardless of currency symbol.
+  protected extractPrice(text: string): number | null {
+    if (!text) return null;
+    const cleaned = text.replace(/[₹$€£,\s]/g, '').replace(/[^\d.]/g, '');
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? null : num;
+  }
+
+  // Normalize a price that may be in USD/EUR to INR.
+  // Uses heuristic: if price < 1500, assume foreign currency and convert.
+  protected normalizeToInr(price: number, pageHasRupeeSymbol: boolean): number {
+    if (pageHasRupeeSymbol || price >= 1500) return price;
+    // Likely USD range ($30–$2000) → INR @ 84
+    if (price >= 30 && price <= 2000) return Math.round(price * 84);
+    return price;
   }
 
   private async closeContext(): Promise<void> {
@@ -370,7 +476,6 @@ export abstract class BaseScraper {
         console.log(`[${this.source}] scrape_start attempt=${attempt + 1} hotel=${hotelName}`);
         const rates = await this.scrapeHotel(hotelName, checkIn, checkOut);
 
-        // Read into typed local — avoids TS narrowing this._lastDiag to never
         const diag = this._lastDiag as ScraperDiagnostics | null;
         if (diag) {
           diag.hotelName = hotelName;
@@ -382,6 +487,16 @@ export abstract class BaseScraper {
         console.log(`[${this.source}] scrape_done hotel=${hotelName} rates=${rates.length} ms=${ms}`);
 
         if (rates.length === 0) {
+          // Capture debug artifact for zero-rate pages so Railway logs have context
+          try {
+            if (this._context) {
+              const pages = this._context.pages();
+              if (pages.length > 0) {
+                await this.captureDebugArtifacts(pages[0], this.source, `zero_rates_${hotelName.replace(/\s+/g, '_')}`);
+              }
+            }
+          } catch { /* ignore */ }
+
           console.warn(JSON.stringify({
             event: 'ZERO_RATES',
             source: this.source,
@@ -390,7 +505,7 @@ export abstract class BaseScraper {
             hasPriceSymbol: lastDiag?.hasPriceSymbol,
             pageTitle: lastDiag?.pageTitle,
             samplePrices: lastDiag?.samplePrices,
-            sampleBodyText: (lastDiag?.sampleBodyText ?? '').substring(0, 200),
+            sampleBodyText: (lastDiag?.sampleBodyText ?? '').substring(0, 300),
           }));
         }
 
@@ -406,7 +521,6 @@ export abstract class BaseScraper {
       } catch (error) {
         lastError = error as Error;
 
-        // Read into typed local — avoids TS narrowing to never
         const diagErr = this._lastDiag as ScraperDiagnostics | null;
         if (diagErr) {
           diagErr.hotelName = hotelName;
@@ -453,14 +567,21 @@ export abstract class BaseScraper {
 
   async cleanup(): Promise<void> { await this.closeContext(); }
 
-  protected extractPrice(text: string): number | null {
-    if (!text) return null;
-    const cleaned = text.replace(/[₹,\s]/g, '').replace(/[^\d.]/g, '');
-    const num = parseFloat(cleaned);
-    return isNaN(num) ? null : num;
+  protected formatDate(date: Date): string { return date.toISOString().split('T')[0]; }
+
+  // MMDDYYYY format used by MakeMyTrip
+  protected formatMmtDate(date: Date): string {
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return `${mm}${dd}${date.getFullYear()}`;
   }
 
-  protected formatDate(date: Date): string { return date.toISOString().split('T')[0]; }
+  // DDMMYYYY format used by some Indian OTAs
+  protected formatDdMmYyyy(date: Date): string {
+    const dd = String(date.getDate()).padStart(2, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    return `${dd}-${mm}-${date.getFullYear()}`;
+  }
 
   protected async rateLimitWait(): Promise<void> {
     await sleep((60 / this.config.rateLimit) * 1000);
