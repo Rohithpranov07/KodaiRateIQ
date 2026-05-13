@@ -1,5 +1,9 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // Explicitly generate the Debian bookworm (glibc + OpenSSL 3.x) engine.
+  // "native" covers the build machine (macOS dev / Linux CI).
+  // "linux-x64-openssl-3.0.x" is the Railway/Docker Debian runtime engine.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
