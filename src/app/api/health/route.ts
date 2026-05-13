@@ -15,7 +15,7 @@ export async function GET() {
         status: latestLog?.status === 'success' ? 'healthy' : 'degraded',
         lastRun: latestLog?.createdAt || null,
         error: latestLog?.errorMessage || null,
-        duration: latestLog?.durationMs || null
+        duration: latestLog?.duration || null
       },
       timestamp: new Date().toISOString(),
     });

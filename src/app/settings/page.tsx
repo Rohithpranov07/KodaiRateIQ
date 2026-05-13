@@ -96,16 +96,16 @@ export default function SettingsPage() {
         {/* System Integration */}
         <section className="clay-card rounded-2xl p-phi-lg md:col-span-2">
           <div className="flex justify-between items-center mb-phi-md">
-            <h3 className="text-headline-mobile" style={{ color: 'var(--color-text-primary)' }}>Gemini AI & PMS Integrations</h3>
+            <h3 className="text-headline-mobile" style={{ color: 'var(--color-text-primary)' }}>MiMo AI & PMS Integrations</h3>
             <button className="text-label-caps px-4 py-2 rounded-xl" style={{ color: 'var(--color-text-primary)', border: '1px solid var(--color-border)' }}>+ Generate New Key</button>
           </div>
           <p className="text-data-mono mb-6" style={{ color: 'var(--color-text-secondary)' }}>API Credentials & Webhooks</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-phi-lg">
             <div className="clay-inset p-4 rounded-xl">
-              <span className="text-label-caps" style={{ color: 'var(--color-text-secondary)' }}>Gemini Pro Vision Engine Key</span>
+              <span className="text-label-caps" style={{ color: 'var(--color-text-secondary)' }}>MiMo AI Platform API Key</span>
               <div className="flex items-center gap-2 mt-3">
                 <span className="material-symbols-outlined text-[16px]" style={{ color: 'var(--color-gold)' }}>key</span>
-                <span className="text-data-mono font-medium" style={{ color: 'var(--color-text-primary)' }}>sk-gem-••••••••••••</span>
+                <span className="text-data-mono font-medium" style={{ color: 'var(--color-text-primary)' }}>tp-••••••••••••••••</span>
                 <span className="text-data-mono ml-auto" style={{ color: 'var(--color-positive)', fontSize: '10px' }}>Active</span>
               </div>
             </div>

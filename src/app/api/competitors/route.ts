@@ -47,6 +47,8 @@ export async function GET() {
         starRating: h.starRating,
         role: h.role,
         isTarget: h.isTarget,
+        luxuryTier: h.luxuryTier,
+        facilityScore: h.facilityScore,
         facilities: h.facilities.filter(f => f.available).map(f => f.name),
         map: snap?.bestMapRate ?? null,
         cp: snap?.bestCpRate ?? null,

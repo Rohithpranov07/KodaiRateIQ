@@ -45,7 +45,7 @@ export function AiInsights({ insights, loading }: AiInsightsProps) {
         </div>
         <div>
           <h3 className="text-lg font-bold">AI Insights</h3>
-          <p className="text-xs text-[#5a5a6e]">Gemini-powered Market Intelligence</p>
+          <p className="text-xs text-[#5a5a6e]">MiMo AI-powered Market Intelligence</p>
         </div>
       </div>
 

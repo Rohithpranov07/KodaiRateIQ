@@ -8,20 +8,29 @@ interface FacilityComparisonProps {
 }
 
 const FACILITY_ICONS: Record<string, string> = {
-  'lake-view': '🏔️',
+  'restaurant': '🍽️',
+  'bar': '🍸',
+  'room-service': '🛎️',
   'spa': '💆',
   'pool': '🏊',
-  'bar': '🍸',
-  'restaurant': '🍽️',
-  'wifi': '📶',
-  'parking': '🅿️',
   'gym': '💪',
-  'room-service': '🛎️',
+  'bonfire': '🔥',
+  'yoga': '🧘',
+  'nature-walks': '🌿',
+  'indoor-games': '🎯',
+  'kids-play': '🎮',
+  'steam-sauna': '♨️',
+  'lake-view': '🏔️',
+  'valley-view': '🌄',
   'concierge': '🤵',
   'butler': '🎩',
   'travel-desk': '✈️',
-  'kids-play': '🎮',
-  'conference': '💼',
+  'laundry': '👕',
+  'wifi': '📶',
+  'parking': '🅿️',
+  'conference-hall': '🏛️',
+  'conference-room': '💼',
+  'business-centre': '💻',
 };
 
 const HOTEL_SLUGS = [

@@ -118,7 +118,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
                 }}
                 labelStyle={{ color: '#8b8b9e', fontSize: 12, marginBottom: 8 }}
                 itemStyle={{ padding: '2px 0' }}
-                formatter={(value: number, name: string) => [
+                formatter={(value: any, name: any) => [
                   formatINR(value),
                   HOTEL_NAMES[name] || name,
                 ]}

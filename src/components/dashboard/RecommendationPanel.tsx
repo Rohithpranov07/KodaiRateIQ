@@ -120,7 +120,7 @@ export function RecommendationPanel({ recommendation, loading }: RecommendationP
           <div className="flex items-center gap-2 mb-2">
             <span className="text-xs font-medium text-indigo-400 uppercase tracking-wider">AI Reasoning</span>
             <span className="px-1.5 py-0.5 text-[9px] rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              Gemini 2.5
+              MiMo AI
             </span>
           </div>
           <p className="text-sm text-[#8b8b9e] leading-relaxed">{rec.reasoning}</p>

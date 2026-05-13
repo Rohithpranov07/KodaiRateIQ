@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -23,71 +24,193 @@ export default function SideNav() {
   };
 
   return (
-    <nav className="hidden md:flex fixed left-0 top-0 h-full w-[280px] flex-col py-margin gap-phi-lg z-40 bg-[var(--color-champagne)] border-r border-[var(--color-border)] shadow-[8px_0_24px_rgba(17,17,17,0.04)]">
+    <nav className="hidden md:flex fixed left-0 top-0 h-full w-[272px] flex-col z-40"
+      style={{
+        background: 'linear-gradient(180deg, #EDE4D3 0%, #E8DECE 100%)',
+        borderRight: '1px solid rgba(17,17,17,0.08)',
+        boxShadow: '4px 0 24px rgba(17,17,17,0.05)',
+      }}
+    >
       {/* Brand Header */}
-      <div className="px-margin mb-phi-xl">
-        <div className="flex items-center gap-phi-sm mb-phi-sm">
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center clay-inset">
-            <span className="material-symbols-outlined text-2xl" style={{ color: 'var(--color-gold)' }}>diamond</span>
+      <div className="px-6 pt-8 pb-6">
+        <div className="flex items-center gap-3.5">
+          {/* Logo Container */}
+          <div
+            className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden"
+            style={{
+              background: 'rgba(255,255,255,0.6)',
+              boxShadow: '0 2px 12px rgba(138,106,59,0.18), inset 0 1px 2px rgba(255,255,255,0.8)',
+              border: '1px solid rgba(255,255,255,0.5)',
+            }}
+          >
+            <Image
+              src="/images.png"
+              alt="Hotel Kodai International"
+              width={36}
+              height={36}
+              className="object-contain"
+              priority
+            />
           </div>
-          <div>
-            <h1 className="text-headline-mobile tracking-tight" style={{ color: 'var(--color-text-primary)', fontWeight: 300, fontSize: '22px', lineHeight: '28px' }}>
-              KodaiRate<span style={{ fontWeight: 500 }}>IQ</span>
+
+          {/* Brand Text */}
+          <div className="leading-none">
+            <p className="text-[9px] uppercase tracking-[0.2em] mb-1" style={{ color: 'var(--color-warm-slate)', opacity: 0.8 }}>
+              Hotel Kodai International
+            </p>
+            <h1 style={{ color: 'var(--color-luxury-black)', fontWeight: 300, fontSize: '18px', letterSpacing: '-0.03em', lineHeight: 1 }}>
+              KodaiRate<span style={{ fontWeight: 600 }}>IQ</span>
             </h1>
-            <span className="text-label-caps" style={{ color: 'var(--color-text-secondary)', opacity: 0.8, fontSize: '10px' }}>
-              Hospitality Intelligence
-            </span>
+            <p className="text-[8px] uppercase tracking-[0.18em] mt-1" style={{ color: 'var(--color-warm-slate)', opacity: 0.65 }}>
+              Intelligence Platform
+            </p>
           </div>
         </div>
+
+        {/* Gold accent line */}
+        <div className="mt-5 h-px" style={{ background: 'linear-gradient(90deg, rgba(201,169,110,0.5), transparent)' }} />
       </div>
 
+      {/* Nav Section Label */}
+      <p className="px-6 mb-2 text-[9px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--color-warm-slate)', opacity: 0.5 }}>
+        Navigation
+      </p>
+
       {/* Nav Links */}
-      <ul className="flex-1 flex flex-col gap-0.5">
+      <ul className="flex-1 flex flex-col px-3 gap-0.5 overflow-y-auto scrollbar-hide">
         {navItems.map((item) => {
           const active = isActive(item.href);
           return (
             <li key={item.href}>
               <Link
                 href={item.href}
-                className="group flex items-center gap-phi-md px-margin py-phi-sm transition-all duration-300"
+                className="group flex items-center gap-3 px-3.5 py-3 rounded-xl transition-all duration-200"
                 style={{
-                  color: active ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                  fontWeight: active ? 500 : 400,
-                  opacity: active ? 1 : 0.8,
-                  background: active ? 'rgba(255,255,255,0.4)' : 'transparent',
-                  borderRight: active ? '2px solid var(--color-gold)' : '2px solid transparent',
-                  boxShadow: active ? 'inset 2px 2px 4px rgba(255,255,255,0.8)' : 'none',
+                  background: active
+                    ? 'linear-gradient(135deg, rgba(255,255,255,0.75), rgba(255,255,255,0.45))'
+                    : 'transparent',
+                  boxShadow: active
+                    ? '0 2px 12px rgba(138,106,59,0.1), inset 0 1px 2px rgba(255,255,255,0.8)'
+                    : 'none',
+                  border: active
+                    ? '1px solid rgba(255,255,255,0.6)'
+                    : '1px solid transparent',
                 }}
               >
-                <span
-                  className="material-symbols-outlined text-[20px] group-hover:translate-x-1 transition-transform duration-300"
-                  style={active ? { color: 'var(--color-gold)', fontVariationSettings: "'FILL' 1" } : {}}
+                {/* Icon */}
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all duration-200"
+                  style={{
+                    background: active
+                      ? 'linear-gradient(135deg, #D4B070, var(--color-royal-gold))'
+                      : 'transparent',
+                    boxShadow: active ? '0 2px 8px rgba(138,106,59,0.3)' : 'none',
+                  }}
                 >
-                  {item.icon}
+                  <span
+                    className="material-symbols-outlined text-[18px] transition-all duration-200"
+                    style={{
+                      color: active ? '#fff' : 'var(--color-warm-slate)',
+                      fontVariationSettings: active ? "'FILL' 1" : "'FILL' 0",
+                      opacity: active ? 1 : 0.75,
+                    }}
+                  >
+                    {item.icon}
+                  </span>
+                </div>
+
+                {/* Label */}
+                <span
+                  className="text-[13px] font-medium tracking-tight transition-colors duration-200"
+                  style={{
+                    color: active ? 'var(--color-luxury-black)' : 'var(--color-warm-slate)',
+                    opacity: active ? 1 : 0.8,
+                  }}
+                >
+                  {item.label}
                 </span>
-                <span className="text-label-caps tracking-widest">{item.label}</span>
+
+                {/* Active chevron */}
+                {active && (
+                  <span
+                    className="ml-auto material-symbols-outlined text-[14px]"
+                    style={{ color: 'var(--color-gold)', opacity: 0.6 }}
+                  >
+                    chevron_right
+                  </span>
+                )}
               </Link>
             </li>
           );
         })}
       </ul>
 
-      {/* Settings at Bottom */}
-      <div className="mt-auto mb-margin">
+      {/* Divider */}
+      <div className="mx-6 my-3 h-px" style={{ background: 'rgba(17,17,17,0.07)' }} />
+
+      {/* Settings Link */}
+      <div className="px-3 mb-4">
         <Link
           href="/settings"
-          className="group flex items-center gap-phi-md px-margin py-phi-sm transition-all duration-300"
+          className="group flex items-center gap-3 px-3.5 py-3 rounded-xl transition-all duration-200"
           style={{
-            color: pathname === '/settings' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-            fontWeight: pathname === '/settings' ? 500 : 400,
-            background: pathname === '/settings' ? 'rgba(255,255,255,0.4)' : 'transparent',
-            borderRight: pathname === '/settings' ? '2px solid var(--color-gold)' : '2px solid transparent',
-            boxShadow: pathname === '/settings' ? 'inset 2px 2px 4px rgba(255,255,255,0.8)' : 'none',
+            background: pathname === '/settings'
+              ? 'linear-gradient(135deg, rgba(255,255,255,0.75), rgba(255,255,255,0.45))'
+              : 'transparent',
+            boxShadow: pathname === '/settings'
+              ? '0 2px 12px rgba(138,106,59,0.1), inset 0 1px 2px rgba(255,255,255,0.8)'
+              : 'none',
+            border: pathname === '/settings'
+              ? '1px solid rgba(255,255,255,0.6)'
+              : '1px solid transparent',
           }}
         >
-          <span className="material-symbols-outlined text-[20px] group-hover:translate-x-1 transition-transform duration-300" style={pathname === '/settings' ? { color: 'var(--color-gold)' } : {}}>settings</span>
-          <span className="text-label-caps tracking-widest">Settings</span>
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+            style={{
+              background: pathname === '/settings'
+                ? 'linear-gradient(135deg, #D4B070, var(--color-royal-gold))'
+                : 'transparent',
+              boxShadow: pathname === '/settings' ? '0 2px 8px rgba(138,106,59,0.3)' : 'none',
+            }}
+          >
+            <span
+              className="material-symbols-outlined text-[18px]"
+              style={{
+                color: pathname === '/settings' ? '#fff' : 'var(--color-warm-slate)',
+                fontVariationSettings: pathname === '/settings' ? "'FILL' 1" : "'FILL' 0",
+                opacity: pathname === '/settings' ? 1 : 0.75,
+              }}
+            >
+              settings
+            </span>
+          </div>
+          <span
+            className="text-[13px] font-medium tracking-tight"
+            style={{ color: pathname === '/settings' ? 'var(--color-luxury-black)' : 'var(--color-warm-slate)', opacity: pathname === '/settings' ? 1 : 0.8 }}
+          >
+            Settings
+          </span>
         </Link>
+      </div>
+
+      {/* System Status Footer */}
+      <div className="mx-4 mb-6 px-4 py-3 rounded-2xl"
+        style={{
+          background: 'rgba(255,255,255,0.35)',
+          border: '1px solid rgba(255,255,255,0.5)',
+          backdropFilter: 'blur(8px)',
+        }}
+      >
+        <div className="flex items-center gap-2 mb-2">
+          <div className="live-dot shrink-0" />
+          <span className="text-[10px] font-bold tracking-[0.12em] uppercase" style={{ color: 'var(--color-positive)' }}>
+            All Systems Online
+          </span>
+        </div>
+        <p className="text-[9px] leading-snug" style={{ color: 'var(--color-warm-slate)', opacity: 0.65 }}>
+          MiMo AI Engine · v4.2.0 · 99.9% uptime
+        </p>
       </div>
     </nav>
   );

@@ -14,7 +14,7 @@ export function Footer() {
             <span className="text-sm font-semibold text-white/60">KodaiRateIQ</span>
           </div>
           <p className="text-xs text-[#5a5a6e]">
-            Hotel Rate Intelligence Platform • Powered by Gemini AI • © {new Date().getFullYear()}
+            Hotel Rate Intelligence Platform • Powered by MiMo AI • © {new Date().getFullYear()}
           </p>
           <div className="flex items-center gap-1 text-xs text-[#5a5a6e]">
             <span>Built for</span>
