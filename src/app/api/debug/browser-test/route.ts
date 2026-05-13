@@ -21,7 +21,7 @@
 import { NextResponse } from 'next/server';
 import { chromium } from 'playwright-extra';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const StealthPlugin = require('playwright-extra-plugin-stealth');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 
 chromium.use(StealthPlugin());
 

@@ -4,7 +4,7 @@
 
 import { chromium } from 'playwright-extra';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const StealthPlugin = require('playwright-extra-plugin-stealth');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 import type { Browser, BrowserContext, Page } from 'playwright';
 import type { ScrapedRate, ScrapeResult, ScraperConfig } from '@/types';
 import { sleep } from '@/lib/utils';
