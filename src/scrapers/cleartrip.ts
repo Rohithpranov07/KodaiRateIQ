@@ -6,12 +6,14 @@ import { BaseScraper } from './base';
 import { classifyMealPlan, normalizeTaxInclusive } from '@/engine/map-classifier';
 import type { ScrapedRate } from '@/types';
 
-const CLEARTRIP_SLUGS: Record<string, string> = {
-  'The Carlton':               'the-carlton-kodaikanal',
-  'The Tamara Kodai':          'the-tamara-kodaikanal',
-  'Hotel Kodai International': 'hotel-kodai-international',
-  'Sterling Kodai Lake':       'sterling-kodai-lake',
-  'Le Poshe by Sparsa':        'le-poshe-by-sparsa',
+// Cleartrip hotel slugs return 410 Gone — use city search + name matching instead.
+// Partial names used for fuzzy matching within city results.
+const HOTEL_MATCH_NAMES: Record<string, string[]> = {
+  'The Carlton':               ['carlton', 'the carlton'],
+  'The Tamara Kodai':          ['tamara', 'tamara kodai'],
+  'Hotel Kodai International': ['kodai international', 'kodai inter'],
+  'Sterling Kodai Lake':       ['sterling', 'sterling kodai'],
+  'Le Poshe by Sparsa':        ['le poshe', 'poshe'],
 };
 
 const ROOM_SELS = [
@@ -43,8 +45,8 @@ export class CleartripScraper extends BaseScraper {
   get source(): string { return 'cleartrip'; }
 
   async scrapeHotel(hotelName: string, checkIn: Date, checkOut: Date): Promise<ScrapedRate[]> {
-    const slug = CLEARTRIP_SLUGS[hotelName];
-    if (!slug) return [];
+    const matchNames = HOTEL_MATCH_NAMES[hotelName];
+    if (!matchNames) return [];
 
     const page = await this.newPage();
     const rates: ScrapedRate[] = [];
@@ -53,9 +55,10 @@ export class CleartripScraper extends BaseScraper {
       const ci = this.formatDate(checkIn);
       const co = this.formatDate(checkOut);
 
-      const url = `https://www.cleartrip.com/hotels/${slug}/details?checkin=${ci}&checkout=${co}&adults=2&rooms=1`;
+      // Use city-level search — direct hotel slugs return 410 Gone
+      const url = `https://www.cleartrip.com/hotels/search/?city=Kodaikanal&checkin=${ci}&checkout=${co}&adults=2&rooms=1`;
 
-      console.log(`[cleartrip] navigating hotel=${hotelName}`);
+      console.log(`[cleartrip] navigating city search for ${hotelName}`);
       await this.navigate(page, url);
 
       for (const skipSel of [
@@ -80,6 +83,9 @@ export class CleartripScraper extends BaseScraper {
       }
 
       for (const card of allCards) {
+        // Check if this card matches our target hotel
+        const cardText = (await card.textContent())?.toLowerCase() || '';
+        if (!matchNames.some(n => cardText.includes(n))) continue;
         try {
           const nameEl = await card.$('[class*="roomName"], [class*="RoomName"], h3, h4, [class*="name"]');
           const roomName = (await nameEl?.textContent())?.trim() || 'Standard Room';

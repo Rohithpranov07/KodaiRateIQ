@@ -1,57 +1,55 @@
 // ============================================================
 // KodaiRateIQ — Agoda Scraper
-// Forces INR currency via URL param. Multi-selector strategy.
+// All direct hotel slugs and property ID URLs return 404 from
+// non-India IPs. Uses Agoda city search (city=8279 = Kodaikanal)
+// and matches hotels by name within results.
+// Currency forced to INR via selectedCurrencyCode param.
 // ============================================================
 
 import { BaseScraper } from './base';
 import { classifyMealPlan, normalizeTaxInclusive } from '@/engine/map-classifier';
 import type { ScrapedRate } from '@/types';
 
-// Agoda property slugs (verified format: name/hotel/city.html)
-const AGODA_SLUGS: Record<string, string> = {
-  'The Carlton':               'the-carlton-kodaikanal',
-  'The Tamara Kodai':          'the-tamara-kodaikanal',
-  'Hotel Kodai International': 'hotel-kodai-international',
-  'Sterling Kodai Lake':       'sterling-kodai-lake',
-  'Le Poshe by Sparsa':        'le-poshe-by-sparsa-kodaikanal',
+// Agoda city ID 8279 = Kodaikanal, Tamil Nadu, India
+const AGODA_KODAIKANAL_CITY_ID = '8279';
+
+const HOTEL_MATCH_NAMES: Record<string, string[]> = {
+  'The Carlton':               ['carlton', 'the carlton'],
+  'The Tamara Kodai':          ['tamara', 'tamara kodai'],
+  'Hotel Kodai International': ['kodai international', 'kodai inter'],
+  'Sterling Kodai Lake':       ['sterling', 'sterling kodai'],
+  'Le Poshe by Sparsa':        ['le poshe', 'poshe'],
 };
 
-// Agoda numeric property IDs (needed for fallback URL)
-const AGODA_PROPERTY_IDS: Record<string, string> = {
-  'The Carlton':               '302074',
-  'The Tamara Kodai':          '2177765',
-  'Hotel Kodai International': '495614',
-  'Sterling Kodai Lake':       '256481',
-  'Le Poshe by Sparsa':        '9136226',
-};
-
-const ROOM_CARD_SELS = [
-  '[data-selenium="RoomCard"]',
-  '[class*="RoomCard"]',
-  '[class*="room-card"]',
-  '[data-testid*="room"]',
-  '[class*="MasterRoom"]',
-  '[class*="PropertyRooms"]',
-  '[class*="roomtype"]',
+const HOTEL_CARD_SELS = [
+  '[data-selenium="hotel-item"]',
+  '[data-element-name="hotel-card"]',
+  '[class*="PropertyCard"]',
+  '[class*="hotel-list-item"]',
+  '[class*="HotelCard"]',
+  '[class*="hotel-card"]',
+  'li[data-testid*="hotel"]',
+  'article[class*="hotel"]',
 ];
 
-const ROOM_NAME_SELS = [
-  '[data-selenium="RoomName"]',
-  '[class*="RoomName"]',
-  '[class*="room-name"]',
-  '[class*="roomType"]',
-  'h3', 'h4',
+const HOTEL_NAME_SELS = [
+  '[data-selenium="hotel-name"]',
+  '[data-element-name="hotel-name"]',
+  '[class*="PropertyName"]',
+  '[class*="hotelName"]',
+  '[class*="HotelName"]',
+  'h3', 'h4', 'h2',
 ];
 
 const PRICE_SELS = [
   '[data-selenium="PriceDisplay"]',
+  '[data-element-name="final-price"]',
   '[class*="priceValue"]',
   '[class*="PriceValue"]',
+  '[class*="final-price"]',
   '[class*="price-display"]',
   '[class*="price"]',
   '[class*="Price"]',
-  '[class*="amount"]',
-  'strong[class*="price"]',
 ];
 
 const MEAL_SELS = [
@@ -60,17 +58,15 @@ const MEAL_SELS = [
   '[class*="meal"]',
   '[class*="Meal"]',
   '[class*="BoardType"]',
-  '[class*="boardType"]',
 ];
 
 export class AgodaScraper extends BaseScraper {
   get source(): string { return 'agoda'; }
 
   async scrapeHotel(hotelName: string, checkIn: Date, checkOut: Date): Promise<ScrapedRate[]> {
-    const slug = AGODA_SLUGS[hotelName];
-    const propertyId = AGODA_PROPERTY_IDS[hotelName];
-    if (!slug && !propertyId) {
-      console.warn(`[agoda] No config for: ${hotelName}`);
+    const matchNames = HOTEL_MATCH_NAMES[hotelName];
+    if (!matchNames) {
+      console.warn(`[agoda] No match config for: ${hotelName}`);
       return [];
     }
 
@@ -81,19 +77,18 @@ export class AgodaScraper extends BaseScraper {
       const ci = this.formatDate(checkIn);
       const co = this.formatDate(checkOut);
 
-      // Primary URL with INR currency forced via selectedCurrencyCode
-      const primaryUrl = slug
-        ? `https://www.agoda.com/en-in/${slug}/hotel/kodaikanal-india.html` +
-          `?checkIn=${ci}&checkOut=${co}&rooms=1&adults=2&children=0` +
-          `&selectedCurrencyCode=INR&currency=INR`
-        : `https://www.agoda.com/en-in/hotel/${propertyId}/hotel/kodaikanal-india.html` +
-          `?checkIn=${ci}&checkOut=${co}&rooms=1&adults=2&children=0` +
-          `&selectedCurrencyCode=INR&currency=INR`;
+      // City search — direct hotel slug URLs all return 404 from non-India IPs
+      const url =
+        `https://www.agoda.com/search` +
+        `?city=${AGODA_KODAIKANAL_CITY_ID}` +
+        `&checkIn=${ci}&checkOut=${co}` +
+        `&rooms=1&adults=2&children=0` +
+        `&currency=INR&selectedcurrency=INR`;
 
-      console.log(`[agoda] navigating hotel=${hotelName}`);
-      await this.navigate(page, primaryUrl);
+      console.log(`[agoda] navigating city search for ${hotelName}`);
+      await this.navigate(page, url);
 
-      // Cookie consent banner
+      // Cookie consent
       for (const consentSel of [
         '[data-selenium="cookie-consent-accept-btn"]',
         '#consent-btn',
@@ -110,38 +105,36 @@ export class AgodaScraper extends BaseScraper {
         } catch { /* no banner */ }
       }
 
-      // Additional wait for room cards to render (Agoda is heavily async)
-      const cardSel = ROOM_CARD_SELS.join(', ');
+      // Wait for hotel cards to render
+      const cardSel = HOTEL_CARD_SELS.join(', ');
       await this.waitForSelector(page, cardSel, 20000);
 
-      // Scroll to room section to trigger lazy load
-      try {
-        await page.evaluate(() => {
-          const roomSection = document.querySelector('[data-selenium="RoomCard"], [class*="RoomCard"]');
-          if (roomSection) roomSection.scrollIntoView({ behavior: 'smooth' });
-        });
-        await page.waitForTimeout(3000);
-      } catch { /* ignore */ }
-
       let allCards: Array<import('playwright').ElementHandle> = [];
-      for (const sel of ROOM_CARD_SELS) {
+      for (const sel of HOTEL_CARD_SELS) {
         const cards = await page.$$(sel);
         if (cards.length > 0) {
           allCards = cards;
-          console.log(`[agoda] using selector "${sel}": ${cards.length} room cards`);
+          console.log(`[agoda] selector "${sel}": ${cards.length} hotel cards`);
           break;
         }
       }
 
       for (const card of allCards) {
         try {
-          let roomName = 'Standard Room';
-          for (const nameSel of ROOM_NAME_SELS) {
+          // Match hotel by name
+          let cardName = '';
+          for (const nameSel of HOTEL_NAME_SELS) {
             const el = await card.$(nameSel);
-            const t = (await el?.textContent())?.trim() || '';
-            if (t.length > 2) { roomName = t; break; }
+            const t = (await el?.textContent())?.trim().toLowerCase() || '';
+            if (t.length > 2) { cardName = t; break; }
           }
 
+          const isMatch = matchNames.some(n => cardName.includes(n));
+          if (!isMatch) continue;
+
+          console.log(`[agoda] matched card: "${cardName}" for ${hotelName}`);
+
+          // Extract price
           let price: number | null = null;
           let priceText = '';
           for (const priceSel of PRICE_SELS) {
@@ -153,6 +146,7 @@ export class AgodaScraper extends BaseScraper {
             }
           }
 
+          // Extract meal plan
           let mealText = '';
           for (const mealSel of MEAL_SELS) {
             const el = await card.$(mealSel);
@@ -161,67 +155,29 @@ export class AgodaScraper extends BaseScraper {
           }
 
           if (price && price > 50) {
-            // Detect if USD or INR
             const hasRupee = priceText.includes('₹') || priceText.includes('INR');
             const inrPrice = this.normalizeToInr(price, hasRupee);
-            if (inrPrice < 500 || inrPrice > 500000) continue;
+            if (inrPrice < 500 || inrPrice > 500_000) continue;
 
-            const normalized = normalizeTaxInclusive(inrPrice, true); // Agoda shows tax-inclusive
-            const meal = classifyMealPlan(mealText, roomName);
+            const normalized = normalizeTaxInclusive(inrPrice, true);
+            const meal = classifyMealPlan(mealText, hotelName);
             if (meal.shouldReject) continue;
 
             rates.push({
-              hotelName,
-              roomType: roomName,
+              hotelName, roomType: 'Best Available',
               mapRate: meal.isMapEligible ? normalized : null,
               cpRate: meal.plan === 'CP' ? normalized : null,
               epRate: meal.plan === 'EP' || meal.plan === 'UNKNOWN' ? normalized : null,
-              taxPercent: 18,
-              taxInclusive: true,
-              totalWithTax: inrPrice,
-              source: this.source,
-              sourceUrl: primaryUrl,
-              isAvailable: true,
-              breakfastIncluded: meal.breakfastIncluded,
-              dinnerIncluded: meal.dinnerIncluded,
-              lunchIncluded: meal.lunchIncluded,
-              mealDetails: mealText || undefined,
-              freeCancellation: mealText.includes('free cancel'),
-              hasDiscount: false,
-              occupancy: 2,
-              scrapedAt: new Date(),
-              confidence: meal.confidence * 0.90,
+              taxPercent: 18, taxInclusive: true, totalWithTax: inrPrice,
+              source: this.source, sourceUrl: url, isAvailable: true,
+              breakfastIncluded: meal.breakfastIncluded, dinnerIncluded: meal.dinnerIncluded,
+              lunchIncluded: meal.lunchIncluded, mealDetails: mealText || undefined,
+              freeCancellation: mealText.includes('free cancel'), hasDiscount: false,
+              occupancy: 2, scrapedAt: new Date(), confidence: meal.confidence * 0.88,
             });
+            break;
           }
-        } catch { /* skip */ }
-      }
-
-      // Fallback: generic price scan
-      if (rates.length === 0) {
-        for (const priceSel of PRICE_SELS) {
-          const priceEls = await page.$$(priceSel);
-          for (const el of priceEls.slice(0, 5)) {
-            const t = (await el.textContent()) || '';
-            const price = this.extractPrice(t);
-            if (price && price > 50) {
-              const hasRupee = t.includes('₹') || t.includes('INR');
-              const inrPrice = this.normalizeToInr(price, hasRupee);
-              if (inrPrice >= 1000 && inrPrice <= 500000) {
-                rates.push({
-                  hotelName, roomType: 'Best Available',
-                  mapRate: null, cpRate: null, epRate: normalizeTaxInclusive(inrPrice, true),
-                  taxPercent: 18, taxInclusive: true, totalWithTax: inrPrice,
-                  source: this.source, sourceUrl: primaryUrl, isAvailable: true,
-                  breakfastIncluded: false, dinnerIncluded: false, lunchIncluded: false,
-                  freeCancellation: false, hasDiscount: false,
-                  occupancy: 2, scrapedAt: new Date(), confidence: 0.55,
-                });
-                break;
-              }
-            }
-          }
-          if (rates.length > 0) break;
-        }
+        } catch { /* skip malformed card */ }
       }
 
       if (rates.length === 0) {
@@ -232,7 +188,7 @@ export class AgodaScraper extends BaseScraper {
             hotelName, roomType: 'Best Available',
             mapRate: null, cpRate: null, epRate: evalPrices[0],
             taxPercent: 18, taxInclusive: false, totalWithTax: evalPrices[0],
-            source: this.source, sourceUrl: primaryUrl, isAvailable: true,
+            source: this.source, sourceUrl: url, isAvailable: true,
             breakfastIncluded: false, dinnerIncluded: false, lunchIncluded: false,
             freeCancellation: false, hasDiscount: false,
             occupancy: 2, scrapedAt: new Date(), confidence: 0.40,
