@@ -55,8 +55,9 @@ export class CleartripScraper extends BaseScraper {
       const ci = this.formatDate(checkIn);
       const co = this.formatDate(checkOut);
 
-      // Use city-level search — direct hotel slugs return 410 Gone
-      const url = `https://www.cleartrip.com/hotels/search/?city=Kodaikanal&checkin=${ci}&checkout=${co}&adults=2&rooms=1`;
+      // Direct hotel slugs return 410 Gone. City search returns 308 → 200.
+      // No trailing slash on /search — avoids double-redirect (308 → 308 → 200)
+      const url = `https://www.cleartrip.com/hotels/search?city=Kodaikanal&checkin=${ci}&checkout=${co}&adults=2&rooms=1`;
 
       console.log(`[cleartrip] navigating city search for ${hotelName}`);
       await this.navigate(page, url);

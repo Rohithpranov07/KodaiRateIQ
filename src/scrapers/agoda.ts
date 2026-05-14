@@ -1,17 +1,14 @@
 // ============================================================
 // KodaiRateIQ — Agoda Scraper
-// All direct hotel slugs and property ID URLs return 404 from
-// non-India IPs. Uses Agoda city search (city=8279 = Kodaikanal)
-// and matches hotels by name within results.
-// Currency forced to INR via selectedCurrencyCode param.
+// Correct URL: /city/kodaikanal-in.html (HTTP 200 confirmed).
+// Direct hotel slugs and /search?city= all returned 404/empty.
+// Matches hotels by name within city results.
+// Forces INR via currency param.
 // ============================================================
 
 import { BaseScraper } from './base';
 import { classifyMealPlan, normalizeTaxInclusive } from '@/engine/map-classifier';
 import type { ScrapedRate } from '@/types';
-
-// Agoda city ID 8279 = Kodaikanal, Tamil Nadu, India
-const AGODA_KODAIKANAL_CITY_ID = '8279';
 
 const HOTEL_MATCH_NAMES: Record<string, string[]> = {
   'The Carlton':               ['carlton', 'the carlton'],
@@ -21,24 +18,24 @@ const HOTEL_MATCH_NAMES: Record<string, string[]> = {
   'Le Poshe by Sparsa':        ['le poshe', 'poshe'],
 };
 
-const HOTEL_CARD_SELS = [
+const CARD_SELS = [
   '[data-selenium="hotel-item"]',
   '[data-element-name="hotel-card"]',
   '[class*="PropertyCard"]',
-  '[class*="hotel-list-item"]',
   '[class*="HotelCard"]',
   '[class*="hotel-card"]',
+  '[class*="hotel-item"]',
   'li[data-testid*="hotel"]',
   'article[class*="hotel"]',
 ];
 
-const HOTEL_NAME_SELS = [
+const NAME_SELS = [
   '[data-selenium="hotel-name"]',
   '[data-element-name="hotel-name"]',
   '[class*="PropertyName"]',
-  '[class*="hotelName"]',
   '[class*="HotelName"]',
-  'h3', 'h4', 'h2',
+  '[class*="hotelName"]',
+  'h3', 'h2', 'h4',
 ];
 
 const PRICE_SELS = [
@@ -65,10 +62,7 @@ export class AgodaScraper extends BaseScraper {
 
   async scrapeHotel(hotelName: string, checkIn: Date, checkOut: Date): Promise<ScrapedRate[]> {
     const matchNames = HOTEL_MATCH_NAMES[hotelName];
-    if (!matchNames) {
-      console.warn(`[agoda] No match config for: ${hotelName}`);
-      return [];
-    }
+    if (!matchNames) return [];
 
     const page = await this.newPage();
     const rates: ScrapedRate[] = [];
@@ -77,64 +71,53 @@ export class AgodaScraper extends BaseScraper {
       const ci = this.formatDate(checkIn);
       const co = this.formatDate(checkOut);
 
-      // City search — direct hotel slug URLs all return 404 from non-India IPs
+      // Confirmed HTTP 200. Slug-based and /search?city= all returned 404.
       const url =
-        `https://www.agoda.com/search` +
-        `?city=${AGODA_KODAIKANAL_CITY_ID}` +
-        `&checkIn=${ci}&checkOut=${co}` +
-        `&rooms=1&adults=2&children=0` +
+        `https://www.agoda.com/city/kodaikanal-in.html` +
+        `?checkIn=${ci}&checkOut=${co}&rooms=1&adults=2&children=0` +
         `&currency=INR&selectedcurrency=INR`;
 
-      console.log(`[agoda] navigating city search for ${hotelName}`);
+      console.log(`[agoda] navigating city page for ${hotelName}`);
       await this.navigate(page, url);
 
-      // Cookie consent
-      for (const consentSel of [
+      // Dismiss cookie consent
+      for (const sel of [
         '[data-selenium="cookie-consent-accept-btn"]',
         '#consent-btn',
         'button:has-text("Accept")',
-        '[class*="CookieConsent"] button',
       ]) {
         try {
-          const btn = page.locator(consentSel).first();
-          if (await btn.isVisible({ timeout: 2000 })) {
-            await btn.click();
-            await page.waitForTimeout(800);
-            break;
-          }
+          const btn = page.locator(sel).first();
+          if (await btn.isVisible({ timeout: 2000 })) { await btn.click(); await page.waitForTimeout(800); break; }
         } catch { /* no banner */ }
       }
 
-      // Wait for hotel cards to render
-      const cardSel = HOTEL_CARD_SELS.join(', ');
-      await this.waitForSelector(page, cardSel, 20000);
+      const cardSel = CARD_SELS.join(', ');
+      const found = await this.waitForSelector(page, cardSel, 20000);
+      console.log(`[agoda] hotel cards visible: ${found}`);
 
       let allCards: Array<import('playwright').ElementHandle> = [];
-      for (const sel of HOTEL_CARD_SELS) {
+      for (const sel of CARD_SELS) {
         const cards = await page.$$(sel);
         if (cards.length > 0) {
           allCards = cards;
-          console.log(`[agoda] selector "${sel}": ${cards.length} hotel cards`);
+          console.log(`[agoda] selector "${sel}": ${cards.length} cards`);
           break;
         }
       }
 
       for (const card of allCards) {
         try {
-          // Match hotel by name
           let cardName = '';
-          for (const nameSel of HOTEL_NAME_SELS) {
+          for (const nameSel of NAME_SELS) {
             const el = await card.$(nameSel);
             const t = (await el?.textContent())?.trim().toLowerCase() || '';
             if (t.length > 2) { cardName = t; break; }
           }
 
-          const isMatch = matchNames.some(n => cardName.includes(n));
-          if (!isMatch) continue;
+          if (!matchNames.some(n => cardName.includes(n))) continue;
+          console.log(`[agoda] matched "${cardName}" for ${hotelName}`);
 
-          console.log(`[agoda] matched card: "${cardName}" for ${hotelName}`);
-
-          // Extract price
           let price: number | null = null;
           let priceText = '';
           for (const priceSel of PRICE_SELS) {
@@ -146,7 +129,6 @@ export class AgodaScraper extends BaseScraper {
             }
           }
 
-          // Extract meal plan
           let mealText = '';
           for (const mealSel of MEAL_SELS) {
             const el = await card.$(mealSel);
@@ -177,7 +159,7 @@ export class AgodaScraper extends BaseScraper {
             });
             break;
           }
-        } catch { /* skip malformed card */ }
+        } catch { /* skip */ }
       }
 
       if (rates.length === 0) {
